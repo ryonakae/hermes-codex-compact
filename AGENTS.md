@@ -12,8 +12,9 @@
 
 ```bash
 python -m pytest -q
-python -m py_compile __init__.py auth.py client.py config.py conversion.py engine.py message_ops.py scripts/smoke_compact.py tests/*.py
+python -m py_compile __init__.py auth.py client.py config.py conversion.py engine.py message_ops.py session_fixtures.py scripts/export_session_fixture.py scripts/smoke_compact.py tests/*.py
 python scripts/smoke_compact.py --auth-mode api_key
+python scripts/smoke_compact.py --fixture tests/fixtures/synthetic_session.jsonl --compare-builtin
 ```
 
 Use `--execute` with `scripts/smoke_compact.py` only when intentionally calling remote APIs.
@@ -34,7 +35,7 @@ Before commit/push, run:
 
 ```bash
 python -m pytest -q
-python -m py_compile __init__.py auth.py client.py config.py conversion.py engine.py message_ops.py scripts/smoke_compact.py tests/*.py
+python -m py_compile __init__.py auth.py client.py config.py conversion.py engine.py message_ops.py session_fixtures.py scripts/export_session_fixture.py scripts/smoke_compact.py tests/*.py
 ```
 
 For plugin discovery, run from the Hermes Agent repo after enabling the plugin in `~/.hermes/config.yaml` if needed:

@@ -869,3 +869,22 @@ PoC 後に判断する。
 3. replacement history に tail をどれだけ残すべきか。
 4. fallback / checkpoint / retrieval tool を入れる価値があるか。
 5. plugin を公開 repo 化するか、local experimental に留めるか。
+
+
+## 2026-04-30 addendum: private real-session fixture 到達点
+
+今回の追加到達点:
+
+1. `context.engine` は本番設定では変えず、plugin repo 内のテスト/スクリプトから compact pipeline を直接実行できるようにする。
+2. 実セッション履歴は `tests/fixtures/private/` に置き、`.gitignore` で追跡しない。
+3. JSONL fixture loader は Hermes session export / message-only JSONL / wrapper object の差異に耐える。
+4. `scripts/smoke_compact.py --fixture ...` で実セッションを dry-run / remote execute できる。
+5. `--compare-builtin` で Hermes built-in compressor の入力可否または比較不能理由を表示し、PoC段階で A/B の足場を作る。
+6. private fixture smoke は `RUN_CODEX_COMPACT_PRIVATE=1` の opt-in にして、通常 pytest では skip する。
+
+完了条件:
+
+- synthetic fixture loader tests が通る。
+- private fixture が無い環境でも通常 test suite は通る。
+- smoke CLI の dry-run が fixture path と replacement history preview を出す。
+- raw compact payload / response / 実履歴はデフォルト保存しない。

@@ -140,6 +140,8 @@ def hermes_messages_to_compact_payload(
         "model": model,
         "input": input_items,
         "instructions": build_compact_instructions(focus_topic),
+        "tools": [],
+        "parallel_tool_calls": False,
     }
 
 

@@ -58,7 +58,7 @@ Run tests from the repo root:
 
 ```bash
 python -m pytest -q
-python -m py_compile __init__.py auth.py client.py config.py conversion.py engine.py message_ops.py scripts/smoke_compact.py tests/*.py
+python -m py_compile __init__.py auth.py client.py config.py conversion.py engine.py message_ops.py session_fixtures.py scripts/export_session_fixture.py scripts/smoke_compact.py tests/*.py
 ```
 
 Dry-run the smoke payload without network access:
@@ -67,11 +67,31 @@ Dry-run the smoke payload without network access:
 python scripts/smoke_compact.py --auth-mode api_key
 ```
 
+Use a real exported session fixture without changing `context.engine`:
+
+```bash
+# Writes into tests/fixtures/private/ by default; that directory is gitignored.
+python scripts/export_session_fixture.py --session-id <session-id>
+
+# Dry-run conversion and replacement-history preview from a private fixture.
+python scripts/smoke_compact.py \
+  --fixture tests/fixtures/private/<session-id>.jsonl \
+  --focus-topic "context compression" \
+  --compare-builtin
+```
+
 Actually call the remote API only when you intend to spend tokens / use OAuth credentials:
 
 ```bash
 python scripts/smoke_compact.py --auth-mode api_key --execute
 python scripts/smoke_compact.py --auth-mode codex_oauth --execute
+python scripts/smoke_compact.py --auth-mode codex_oauth --fixture tests/fixtures/private/<session>.jsonl --execute
+```
+
+Private real-session fixture tests are opt-in:
+
+```bash
+RUN_CODEX_COMPACT_PRIVATE=1 python -m pytest tests/test_session_fixtures.py -q
 ```
 
 ## Private API dependency

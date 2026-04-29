@@ -1,0 +1,6 @@
+{"role":"system","content":"You are Hermes, a helpful coding agent."}
+{"role":"user","content":"実際のセッション履歴を読み込んで、それをcompressしてみるというのは可能？"}
+{"role":"assistant","content":"可能です。plugin配下のgitignoreされたfixtureから読み込む形が安全です。"}
+{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"write_file","arguments":"{\"path\":\"tests/test_session_fixtures.py\"}"}}],"content":"テストを追加します。"}
+{"role":"tool","tool_call_id":"call_1","name":"write_file","content":"ok"}
+{"role":"user","content":"その到達点まで実装して。必要なら最初にプランを立て保存"}
