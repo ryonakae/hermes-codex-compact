@@ -9,8 +9,12 @@ import urllib.error
 import urllib.request
 from typing import Any, Callable, Dict, Optional
 
-from auth import build_codex_headers, resolve_codex_credentials
-from config import CodexCompactConfig
+try:
+    from .auth import build_codex_headers, resolve_codex_credentials
+    from .config import CodexCompactConfig
+except ImportError:  # pragma: no cover - local test fallback
+    from auth import build_codex_headers, resolve_codex_credentials
+    from config import CodexCompactConfig
 
 _AUTH_RE = re.compile(r"Bearer\s+[^\s,;\n]+", re.IGNORECASE)
 

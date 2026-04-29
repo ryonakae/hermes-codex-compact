@@ -22,9 +22,14 @@ except Exception:  # pragma: no cover - allows local unit tests outside Hermes r
             self.context_length = context_length
             self.threshold_tokens = int(context_length * self.threshold_percent)
 
-from config import CodexCompactConfig, load_config
-from conversion import extract_compact_text, hermes_messages_to_compact_payload
-from message_ops import build_replacement_history, prepare_for_compact
+try:
+    from .config import CodexCompactConfig, load_config
+    from .conversion import extract_compact_text, hermes_messages_to_compact_payload
+    from .message_ops import build_replacement_history, prepare_for_compact
+except ImportError:  # pragma: no cover - local test fallback
+    from config import CodexCompactConfig, load_config
+    from conversion import extract_compact_text, hermes_messages_to_compact_payload
+    from message_ops import build_replacement_history, prepare_for_compact
 
 
 class CodexCompactEngine(ContextEngine):
@@ -61,7 +66,10 @@ class CodexCompactEngine(ContextEngine):
 
     def _client_or_default(self) -> Any:
         if self._client is None:
-            from client import CompactClient
+            try:
+                from .client import CompactClient
+            except ImportError:  # pragma: no cover - local test fallback
+                from client import CompactClient
 
             self._client = CompactClient(self.config)
         return self._client

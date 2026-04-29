@@ -1,0 +1,4 @@
+name: hermes-codex-compact
+version: 0.1.0
+description: Experimental Hermes ContextEngine using OpenAI/Codex responses compact.
+kind: standalone

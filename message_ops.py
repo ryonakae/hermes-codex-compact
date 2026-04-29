@@ -5,7 +5,10 @@ from __future__ import annotations
 import copy
 from typing import Any, Dict, Iterable, List, Set
 
-from conversion import truncate_text
+try:
+    from .conversion import truncate_text
+except ImportError:  # pragma: no cover - local test fallback
+    from conversion import truncate_text
 
 CHECKPOINT_MESSAGE_PREFIX = """[Context compacted by hermes-codex-compact]
 
