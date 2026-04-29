@@ -844,12 +844,28 @@ plugin discovery smoke を実行。
 - Codex OAuth mode の direct compact smoke が通る、または 401/403/404 等の結果を安全に取得できる。
 - manual `/compress` 後に Hermes の次 turn が壊れない。
 
+## PoC 実装結果メモ
+
+2026-04-30 時点で、計画した PoC フェーズは実装済み。
+
+- Phase 1: `conversion.py` / `message_ops.py` と tests を実装。
+- Phase 2: `CodexCompactEngine` と fake-client tests を実装。
+- Phase 3: OpenAI API key client と payload/header tests を実装。
+  - この環境では `OPENAI_API_KEY` が未設定のため、実 API key smoke は `OPENAI_API_KEY is required` で停止することを確認。
+- Phase 4: Codex OAuth client と smoke script を実装。
+  - `python scripts/smoke_compact.py --auth-mode codex_oauth --model gpt-5.5 --execute` が成功。
+  - 小さな fixture に対して compact text と Hermes replacement history を生成できた。
+- Phase 5: `plugin.yaml` / `__init__.py` / README / AGENTS を追加。
+  - Hermes plugin loader で `found=True`, `enabled=True`, `error=None`, `context_engine_name=codex_compact` を確認。
+  - `~/.hermes/config.yaml` には `plugins.enabled: hermes-codex-compact` を追加済み。
+  - 安全のため `context.engine` はまだ `compressor` のまま。実際にこの engine を使うには `context.engine: codex_compact` に切り替える。
+
 ## 次の判断ポイント
 
 PoC 後に判断する。
 
-1. `responses/compact` の出力品質は Hermes built-in より良いか。
-2. Codex OAuth 経路は実用可能か、API key 専用にするべきか。
+1. 実セッションの `/compress` で、Hermes built-in より継続品質が良いか。
+2. Codex OAuth 経路を experimental として使い続けるか、OpenAI API key 経路を正式推奨にするか。
 3. replacement history に tail をどれだけ残すべきか。
 4. fallback / checkpoint / retrieval tool を入れる価値があるか。
 5. plugin を公開 repo 化するか、local experimental に留めるか。
