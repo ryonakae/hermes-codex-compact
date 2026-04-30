@@ -43,6 +43,8 @@ codex_compact:
   reasoning_effort: null
   reasoning_summary: null
   verbosity: null
+  base_instructions: ""
+  base_instructions_file: ""
   request_timeout_seconds: 120
   debug_dump: false
 ```
@@ -95,7 +97,10 @@ python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.js
 python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.jsonl --variant conversion-parity
 python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.jsonl --variant payload-parity
 python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.jsonl --variant preprocessing-parity
+python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.jsonl --variant instructed-remote
 ```
+
+`instructed-remote` keeps the remote `/responses/compact` path but fills `instructions` with a Hermes/Codex compact base instruction when the fixture has no system/developer messages. Use it to test whether the prior poor output was caused by sending `instructions: ""`.
 
 Actually call the remote API only when you intend to spend tokens / use OAuth credentials:
 

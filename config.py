@@ -29,6 +29,8 @@ class CodexCompactConfig:
     reasoning_effort: Optional[str] = None
     reasoning_summary: Optional[str] = None
     verbosity: Optional[str] = None
+    base_instructions: str = ""
+    base_instructions_file: str = ""
     request_timeout_seconds: int = 120
     debug_dump: bool = False
     openai_api_key: str = ""
@@ -78,4 +80,8 @@ def load_config(overrides: Optional[Dict[str, Any]] = None) -> CodexCompactConfi
     config.request_timeout_seconds = int(config.request_timeout_seconds)
     if config.max_input_item_chars is not None:
         config.max_input_item_chars = int(config.max_input_item_chars)
+    if config.base_instructions_file:
+        instructions_path = Path(str(config.base_instructions_file)).expanduser()
+        if instructions_path.exists():
+            config.base_instructions = instructions_path.read_text()
     return config

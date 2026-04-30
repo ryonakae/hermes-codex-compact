@@ -130,6 +130,7 @@ class CodexCompactEngine(ContextEngine):
                 instruction_policy=self.config.instruction_policy,
                 missing_tool_output_policy=self.config.missing_tool_output_policy,
                 preprocessing_mode=self.config.preprocessing_mode,
+                base_instructions=self.config.base_instructions,
             )
             response = self._client_or_default().compact(payload)
             replacement = compact_response_to_hermes_messages(

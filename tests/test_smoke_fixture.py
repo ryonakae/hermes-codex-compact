@@ -47,6 +47,26 @@ def test_variant_overrides_map_to_codex_parity_settings():
     assert preprocessing["preprocessing_mode"] == "codex_parity"
     assert preprocessing["recent_tail_messages"] == 0
 
+    instructed = variant_overrides("instructed-remote")
+    assert instructed["message_shape"] == "core"
+    assert instructed["instruction_policy"] == "codex_base_only"
+    assert instructed["parallel_tool_calls"] is True
+    assert instructed["base_instructions"]
+
+
+def test_instructed_remote_fixture_payload_has_non_empty_instructions():
+    fixture = Path(__file__).parent / "fixtures" / "synthetic_session.jsonl"
+
+    payload, _messages = build_payload_from_fixture(
+        fixture,
+        model="gpt-test",
+        focus_topic=None,
+        variant="instructed-remote",
+    )
+
+    assert len(payload["instructions"]) > 0
+    assert payload["parallel_tool_calls"] is True
+
 
 def test_smoke_payload_variant_changes_message_shape():
     fixture = Path(__file__).parent / "fixtures" / "synthetic_session.jsonl"

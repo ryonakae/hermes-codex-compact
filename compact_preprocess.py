@@ -164,6 +164,7 @@ def build_codex_compact_payload(
     instruction_policy: str = "all_instructions",
     missing_tool_output_policy: str = "drop",
     preprocessing_mode: str = "safe_truncate",
+    base_instructions: str = "",
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     items, instructions = hermes_messages_to_response_items(
         messages,
@@ -187,6 +188,9 @@ def build_codex_compact_payload(
         preserve_latest_user=True,
     )
     items = sanitize_response_tool_pairs(items, drop_incomplete_tool_pairs=True)
+
+    if not instructions and base_instructions:
+        instructions = str(base_instructions).strip()
 
     responses_tools = responses_tools_from_chat_tools(tools)
     payload: Dict[str, Any] = {

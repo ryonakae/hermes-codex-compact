@@ -24,6 +24,34 @@ def test_payload_uses_response_items_and_base_instructions():
     assert stats["response_item_types"] == {"message": 1}
 
 
+def test_payload_uses_fallback_base_instructions_when_messages_have_none():
+    messages = [{"role": "user", "content": "hello"}]
+
+    payload, stats = build_codex_compact_payload(
+        messages,
+        model="gpt-5.5",
+        base_instructions="fallback compact base instructions",
+    )
+
+    assert payload["instructions"] == "fallback compact base instructions"
+    assert stats["instruction_chars"] == len("fallback compact base instructions")
+
+
+def test_payload_keeps_existing_message_instructions_over_fallback():
+    messages = [
+        {"role": "system", "content": "system rules"},
+        {"role": "user", "content": "hello"},
+    ]
+
+    payload, _stats = build_codex_compact_payload(
+        messages,
+        model="gpt-5.5",
+        base_instructions="fallback compact base instructions",
+    )
+
+    assert payload["instructions"] == "system rules"
+
+
 def test_payload_can_use_core_message_shape_and_codex_base_instruction_policy():
     messages = [
         {"role": "system", "content": "base rules"},

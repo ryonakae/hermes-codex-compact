@@ -26,7 +26,9 @@ from config import CodexCompactConfig  # noqa: E402
 from message_ops import build_replacement_history  # noqa: E402
 from session_fixtures import load_session_messages, summarize_messages  # noqa: E402
 
-VARIANTS = {"current", "conversion-parity", "payload-parity", "preprocessing-parity"}
+VARIANTS = {"current", "conversion-parity", "payload-parity", "preprocessing-parity", "instructed-remote"}
+
+HERMES_COMPACT_BASE_INSTRUCTIONS = """You are Hermes Agent, a coding and task-execution agent. You are compacting a prior agent session for future continuation. The input contains user requests, assistant progress, and structured tool calls/results. Preserve the user's goal, decisions, completed work, relevant files, commands, constraints, blockers, and next steps. Do not copy raw tool output unless it is necessary to resume."""
 
 FIXTURE_MESSAGES = [
     {"role": "system", "content": "You are Hermes, a helpful coding agent."},
@@ -40,11 +42,13 @@ def variant_overrides(variant: str) -> Dict[str, Any]:
     if variant not in VARIANTS:
         raise ValueError(f"Unsupported smoke variant: {variant}")
     overrides: Dict[str, Any] = {}
-    if variant in {"conversion-parity", "payload-parity", "preprocessing-parity"}:
+    if variant in {"conversion-parity", "payload-parity", "preprocessing-parity", "instructed-remote"}:
         overrides["message_shape"] = "core"
-    if variant in {"payload-parity", "preprocessing-parity"}:
+    if variant in {"payload-parity", "preprocessing-parity", "instructed-remote"}:
         overrides["instruction_policy"] = "codex_base_only"
         overrides["parallel_tool_calls"] = True
+    if variant == "instructed-remote":
+        overrides["base_instructions"] = HERMES_COMPACT_BASE_INSTRUCTIONS
     if variant == "preprocessing-parity":
         overrides["missing_tool_output_policy"] = "aborted"
         overrides["preprocessing_mode"] = "codex_parity"
