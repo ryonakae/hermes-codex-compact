@@ -39,6 +39,22 @@ FIXTURE_MESSAGES = [
 ]
 
 
+def apply_focus_topic(payload: Dict[str, Any], focus_topic: str | None) -> Dict[str, Any]:
+    if not focus_topic:
+        return payload
+    topic = " ".join(str(focus_topic).split())[:500]
+    if not topic:
+        return payload
+    payload = dict(payload)
+    current = str(payload.get("instructions") or "").strip()
+    focus_instruction = (
+        "Compaction focus: prioritize preserving context needed to continue this task: "
+        f"{topic}"
+    )
+    payload["instructions"] = f"{current}\n\n{focus_instruction}" if current else focus_instruction
+    return payload
+
+
 def variant_overrides(variant: str) -> Dict[str, Any]:
     if variant not in VARIANTS:
         raise ValueError(f"Unsupported smoke variant: {variant}")
@@ -91,7 +107,7 @@ def build_payload(model: str, focus_topic: str | None = None, *, variant: str = 
     if overrides.get("inject_fixture_tools"):
         tools = minimal_fixture_tool_schemas(extract_tool_names_from_messages(FIXTURE_MESSAGES))
     payload, _stats = build_codex_compact_payload(FIXTURE_MESSAGES, model=model, tools=tools, **payload_kwargs)
-    return payload
+    return apply_focus_topic(payload, focus_topic)
 
 
 def build_payload_from_fixture(
@@ -117,7 +133,7 @@ def build_payload_from_fixture(
         token_budget_chars=max_input_item_chars,
         **payload_kwargs,
     )
-    return payload, messages
+    return apply_focus_topic(payload, focus_topic), messages
 
 
 def _preview_replacement(messages: List[Dict[str, Any]], recent_tail_messages: int = 2) -> List[Dict[str, Any]]:

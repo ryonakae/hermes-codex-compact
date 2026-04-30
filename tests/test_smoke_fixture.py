@@ -84,6 +84,20 @@ def test_instructed_tools_remote_fixture_payload_has_tool_schemas():
     assert {tool["name"] for tool in payload["tools"]} >= {"write_file"}
 
 
+def test_focus_topic_is_reflected_as_compaction_context_not_raw_history():
+    fixture = Path(__file__).parent / "fixtures" / "synthetic_session.jsonl"
+
+    payload, _messages = build_payload_from_fixture(
+        fixture,
+        model="gpt-test",
+        focus_topic="resume the Codex compact quality implementation",
+        variant="instructed-tools-remote",
+    )
+
+    assert "resume the Codex compact quality implementation" in payload["instructions"]
+    assert payload["input"][0].get("content") != "resume the Codex compact quality implementation"
+
+
 def test_smoke_payload_variant_changes_message_shape():
     fixture = Path(__file__).parent / "fixtures" / "synthetic_session.jsonl"
 
