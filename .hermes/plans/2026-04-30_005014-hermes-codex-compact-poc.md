@@ -888,3 +888,61 @@ PoC 後に判断する。
 - private fixture が無い環境でも通常 test suite は通る。
 - smoke CLI の dry-run が fixture path と replacement history preview を出す。
 - raw compact payload / response / 実履歴はデフォルト保存しない。
+
+
+## 2026-04-30 investigation: Codex-equivalent conversion / pre-processing
+
+実セッション smoke の結果、`/responses/compact` API は到達可能だが、現在の flattened `{role, content}` 入力では raw history 寄りの出力になり、Hermes built-in compressor より悪かった。改善には次の2層が必要。
+
+### 1. Hermes形式 → OpenAI/Codex Responses形式
+
+Hermes runtime の参考実装:
+
+- `~/.hermes/hermes-agent/agent/codex_responses_adapter.py`
+  - `_chat_messages_to_responses_input()` が chat-style Hermes messages を Responses input items に変換している。
+  - `system` は input items から除外し、instructions 側へ入る。
+  - `user` / `assistant` content list は `input_text` / `output_text` parts に変換する。
+  - assistant の `tool_calls` は `type: function_call` item に変換する。
+  - tool result は `type: function_call_output` item に変換する。
+  - Codex reasoning / message replay metadata がある場合は `reasoning` / exact assistant `message` item として保持する。
+  - call_id は deterministic fallback を使い、function_call と function_call_output を対応させる。
+
+現在の plugin の `conversion.py` は tool call/result をテキスト化しているだけなので、まずこの adapter の subset を plugin 側へ移植する。目標は compact payload の `input` を plain chat messages ではなく Codex `ResponseItem` 相当へ近づけること。
+
+### 2. Codex compact実行時と同じ前処理
+
+Codex remote compact の参考実装:
+
+- `/tmp/openai-codex/codex-rs/core/src/tasks/compact.rs`
+  - provider が remote compaction 対応なら `compact_remote::run_remote_compact_task()`、そうでなければ local compact。
+- `/tmp/openai-codex/codex-rs/core/src/compact_remote.rs`
+  - `history = sess.clone_history()`
+  - `base_instructions = sess.get_base_instructions()`
+  - `trim_function_call_history_to_fit_context_window()` で context window に収まるまで Codex-generated tail items を後ろから削る。
+  - `history.for_prompt(input_modalities)` で model-visible prompt input を作る。
+  - `built_tools(...).model_visible_specs()` で compact API に渡す tools を構築。
+  - `Prompt { input, tools, parallel_tool_calls, base_instructions, personality, output_schema: None, output_schema_strict: true }` を作る。
+  - `model_client.compact_conversation_history()` が `responses/compact` に投げる。
+  - 返った `ResponseItem[]` は `process_compacted_history()` で developer や非実ユーザー prefix を落とす。
+  - mid-turn では initial context を last real user / summary の前に再注入。manual/pre-turn では再注入しない。
+- `/tmp/openai-codex/codex-rs/core/src/client.rs`
+  - compact payload は `model`, `input`, `instructions`, `tools`, `parallel_tool_calls`, `reasoning`, `text`。
+  - `instructions` は `prompt.base_instructions.text`。compact専用 prompt ではなく、通常 turn と同じ base instructions。
+- `/tmp/openai-codex/codex-rs/core/src/client_common.rs`
+  - `Prompt.get_formatted_input()` は freeform `apply_patch` tool があると shell outputs を structured text に reserialize。
+- `/tmp/openai-codex/codex-rs/core/src/compact.rs`
+  - local compact は `SUMMARIZATION_PROMPT` を user input として追加し、通常 sampling で summary を作る。
+  - replacement history は recent real user messages（最大20k tokens） + summary user message。
+  - remote compact は API から返った replacement history を使うが、post-filter と initial-context reinjection は行う。
+
+### 実装方針
+
+1. `responses_conversion.py` を作り、Hermes messages を Codex `ResponseItem` wire shape に近い dict list へ変換する。既存 `agent.codex_responses_adapter._chat_messages_to_responses_input()` の挙動を fixture tests で再現する。
+2. compact payload は `instructions` に Codex と同じく base instructions / system prompt 相当を入れる。現在の compact専用 instruction は、local fallback summary 用か optional override に下げる。
+3. `tools` は空配列ではなく、Hermes enabled tool schemas を Responses function tool schema に変換して渡す。ただし standalone smoke では fixture metadata から復元できないので、まず empty / provided schemas の2モードにする。
+4. `parallel_tool_calls` は model/tool config に従う。fixture smoke では明示 default。
+5. context-window fitting は Codex と同じ思想に寄せる: raw input が大きすぎる場合、古いものではなく Codex-generated / tool-heavy tail items から削る。ただし Hermes では live latest user を消さない guard を置く。
+6. compact response の post-processing を実装する: developer/system duplication を落とし、実ユーザー message と assistant summary/compaction item を残す。Hermes message history へ戻すときは valid OpenAI chat sequence に変換する。
+7. A/B fixture で以下を比較する: original chars/tokens, payload item count, compact_text/replacement chars, tool-output残存率, structured checkpoint項目の有無。
+
+この順序は「1→2」でも「2→1」でもよいが、まず変換 layer を正しくしないと `/responses/compact` の学習済み挙動に乗れない可能性が高い。
