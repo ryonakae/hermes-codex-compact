@@ -773,6 +773,22 @@ python scripts/smoke_compact.py \
 
 Use the actual command implemented in Task 7.
 
+**Executed 2026-04-30:** remote and local-style smoke were run with `gpt-5.5` and Codex OAuth. Private JSON outputs are stored only under ignored `tests/fixtures/private/remote-smoke-20260430-*` directories.
+
+```text
+variant                         replacement_messages  replacement_chars  likely_resumable
+current-remote                  3                     2,985              false
+instructed-remote               3                     2,985              false
+instructed-tools-remote         3                     2,985              false
+preprocessing-parity-remote     2                     1,235              false
+instructed-tools-local-style    1                     12,428             false
+```
+
+Execution surfaced two real API requirements and both were fixed:
+
+- fixture `todo.todos` schema needs array `items`;
+- normal Responses local-style path needs `store=false` and `stream=true`, plus SSE response parsing.
+
 **Expected signal:**
 
 Local-style output should look closer to a handoff summary than raw remote selected items. If it does, the plugin should treat `/responses/compact` and local-style compact as separate engines/modes, not conflate them.
@@ -848,13 +864,4 @@ Before any remote API smoke:
 
 ## Current recommended next action
 
-Start with Phase 1 Task 1 and Task 2:
-
-```text
-1. Add base instructions config/payload support.
-2. Add instructed remote smoke variant.
-3. Dry-run the private fixture and verify instruction_chars > 0.
-4. Commit/push.
-```
-
-This directly addresses the largest confirmed payload mismatch: the previous smoke sent `instructions: ""`.
+Phase 1〜5 の implementation/smoke は完了。次は Phase 6 の判断として、ignored private output の `instructed-tools-local-style` を raw commit せず手元で読み、handoff quality heuristic が実態を過小評価していないか確認する。現時点の判断は Option B 寄り: `/responses/compact` はこの lossy Hermes fixture では selected-item replacement のまま、local-style compact は明らかに handoff summary に近い。

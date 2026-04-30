@@ -146,7 +146,20 @@ preprocessing-parity   2                     1,234              false
 builtin                103                   33,433             n/a
 ```
 
-Takeaway: parity conversion/payload changes made the request shape closer to Codex, but this endpoint still returned selected history items rather than a Hermes-quality resumable handoff summary for this fixture. `preprocessing-parity` was worse because less conservative preprocessing produced an even shorter selected-item replacement. Do not switch production `context.engine` to `codex_compact` based on these results.
+Initial takeaway: parity conversion/payload changes made the request shape closer to Codex, but `/responses/compact` still returned selected history items rather than a Hermes-quality resumable handoff summary for this fixture. `preprocessing-parity` was worse because less conservative preprocessing produced an even shorter selected-item replacement. Do not switch production `context.engine` to `codex_compact` based on these results.
+
+After adding `instructed-remote`, fixture tool schemas, `--focus-topic`, and `--compact-path local-style`, Codex OAuth smoke was executed again with `gpt-5.5`. Results were stored under ignored timestamped `tests/fixtures/private/remote-smoke-20260430-*` directories; do not commit those files.
+
+```text
+variant                         replacement_messages  replacement_chars  likely_resumable
+current-remote                  3                     2,985              false
+instructed-remote               3                     2,985              false
+instructed-tools-remote         3                     2,985              false
+preprocessing-parity-remote     2                     1,235              false
+instructed-tools-local-style    1                     12,428             false
+```
+
+Updated takeaway: adding instructions and tool schemas did not materially change `/responses/compact` output for this lossy Hermes fixture. The local-style prompt path produced a much larger summary with completed work, remaining work, relevant files, and commit references, so the next quality work should inspect that output manually and tune the handoff quality heuristic before considering runtime use.
 
 Private real-session fixture tests are opt-in:
 
