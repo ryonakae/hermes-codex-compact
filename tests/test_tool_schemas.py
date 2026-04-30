@@ -10,6 +10,15 @@ def test_minimal_fixture_tool_schemas_returns_responses_compatible_tools():
     assert all(tool["parameters"]["type"] == "object" for tool in tools)
 
 
+def test_minimal_fixture_tool_schemas_include_array_items_for_todo():
+    tools = minimal_fixture_tool_schemas(["todo"])
+
+    todo = tools[0]
+    todos_schema = todo["parameters"]["properties"]["todos"]
+    assert todos_schema["type"] == "array"
+    assert todos_schema["items"]["type"] == "object"
+
+
 def test_extract_tool_names_from_assistant_tool_calls_preserves_order():
     messages = [
         {"role": "assistant", "tool_calls": [{"function": {"name": "terminal"}}]},

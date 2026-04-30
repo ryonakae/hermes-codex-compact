@@ -30,4 +30,5 @@ def build_local_style_payload(remote_payload: Dict[str, Any]) -> Dict[str, Any]:
     compact_prompt = f"{templates['prompt'].rstrip()}\n\n{templates['summary_prefix'].rstrip()}"
     input_items.append({"type": "message", "role": "user", "content": compact_prompt})
     payload["input"] = input_items
+    payload["store"] = False
     return payload

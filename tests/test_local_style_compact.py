@@ -23,6 +23,7 @@ def test_build_local_style_payload_appends_compact_prompt_without_mutating_remot
     assert remote_payload["input"] == [{"type": "message", "role": "user", "content": "do work"}]
     assert local_payload["model"] == "gpt-test"
     assert local_payload["instructions"] == "base instructions"
+    assert local_payload["store"] is False
     assert local_payload["input"][:-1] == remote_payload["input"]
     assert local_payload["input"][-1]["role"] == "user"
     assert "CONTEXT CHECKPOINT COMPACTION" in local_payload["input"][-1]["content"]

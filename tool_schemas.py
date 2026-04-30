@@ -57,7 +57,18 @@ _MINIMAL_TOOL_SCHEMAS: Dict[str, Dict[str, Any]] = {
     "todo": {
         "description": "Manage the current session task list.",
         "properties": {
-            "todos": {"type": "array"},
+            "todos": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "content": {"type": "string"},
+                        "status": {"type": "string"},
+                    },
+                    "additionalProperties": True,
+                },
+            },
             "merge": {"type": "boolean"},
         },
     },
