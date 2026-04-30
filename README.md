@@ -98,9 +98,12 @@ python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.js
 python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.jsonl --variant payload-parity
 python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.jsonl --variant preprocessing-parity
 python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.jsonl --variant instructed-remote
+python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.jsonl --variant instructed-tools-remote
 ```
 
 `instructed-remote` keeps the remote `/responses/compact` path but fills `instructions` with a Hermes/Codex compact base instruction when the fixture has no system/developer messages. Use it to test whether the prior poor output was caused by sending `instructions: ""`.
+
+`instructed-tools-remote` additionally injects minimal Responses-compatible function tool schemas inferred from fixture tool calls. This is still a smoke-test approximation, not the final Hermes active tool registry integration.
 
 Actually call the remote API only when you intend to spend tokens / use OAuth credentials:
 

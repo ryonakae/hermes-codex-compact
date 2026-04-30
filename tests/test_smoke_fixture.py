@@ -68,6 +68,22 @@ def test_instructed_remote_fixture_payload_has_non_empty_instructions():
     assert payload["parallel_tool_calls"] is True
 
 
+def test_instructed_tools_remote_fixture_payload_has_tool_schemas():
+    fixture = Path(__file__).parent / "fixtures" / "synthetic_session.jsonl"
+
+    payload, _messages = build_payload_from_fixture(
+        fixture,
+        model="gpt-test",
+        focus_topic=None,
+        variant="instructed-tools-remote",
+    )
+
+    assert len(payload["instructions"]) > 0
+    assert payload["parallel_tool_calls"] is True
+    assert len(payload["tools"]) > 0
+    assert {tool["name"] for tool in payload["tools"]} >= {"write_file"}
+
+
 def test_smoke_payload_variant_changes_message_shape():
     fixture = Path(__file__).parent / "fixtures" / "synthetic_session.jsonl"
 

@@ -25,8 +25,9 @@ from compact_preprocess import build_codex_compact_payload, response_item_type_c
 from config import CodexCompactConfig  # noqa: E402
 from message_ops import build_replacement_history  # noqa: E402
 from session_fixtures import load_session_messages, summarize_messages  # noqa: E402
+from tool_schemas import extract_tool_names_from_messages, minimal_fixture_tool_schemas  # noqa: E402
 
-VARIANTS = {"current", "conversion-parity", "payload-parity", "preprocessing-parity", "instructed-remote"}
+VARIANTS = {"current", "conversion-parity", "payload-parity", "preprocessing-parity", "instructed-remote", "instructed-tools-remote"}
 
 HERMES_COMPACT_BASE_INSTRUCTIONS = """You are Hermes Agent, a coding and task-execution agent. You are compacting a prior agent session for future continuation. The input contains user requests, assistant progress, and structured tool calls/results. Preserve the user's goal, decisions, completed work, relevant files, commands, constraints, blockers, and next steps. Do not copy raw tool output unless it is necessary to resume."""
 
@@ -42,13 +43,15 @@ def variant_overrides(variant: str) -> Dict[str, Any]:
     if variant not in VARIANTS:
         raise ValueError(f"Unsupported smoke variant: {variant}")
     overrides: Dict[str, Any] = {}
-    if variant in {"conversion-parity", "payload-parity", "preprocessing-parity", "instructed-remote"}:
+    if variant in {"conversion-parity", "payload-parity", "preprocessing-parity", "instructed-remote", "instructed-tools-remote"}:
         overrides["message_shape"] = "core"
-    if variant in {"payload-parity", "preprocessing-parity", "instructed-remote"}:
+    if variant in {"payload-parity", "preprocessing-parity", "instructed-remote", "instructed-tools-remote"}:
         overrides["instruction_policy"] = "codex_base_only"
         overrides["parallel_tool_calls"] = True
-    if variant == "instructed-remote":
+    if variant in {"instructed-remote", "instructed-tools-remote"}:
         overrides["base_instructions"] = HERMES_COMPACT_BASE_INSTRUCTIONS
+    if variant == "instructed-tools-remote":
+        overrides["inject_fixture_tools"] = True
     if variant == "preprocessing-parity":
         overrides["missing_tool_output_policy"] = "aborted"
         overrides["preprocessing_mode"] = "codex_parity"
@@ -83,7 +86,11 @@ def evaluate_handoff_quality(text: str) -> Dict[str, bool]:
 
 def build_payload(model: str, focus_topic: str | None = None, *, variant: str = "current") -> dict:
     overrides = variant_overrides(variant)
-    payload, _stats = build_codex_compact_payload(FIXTURE_MESSAGES, model=model, **{k: v for k, v in overrides.items() if k != "recent_tail_messages"})
+    payload_kwargs = {k: v for k, v in overrides.items() if k not in {"recent_tail_messages", "inject_fixture_tools"}}
+    tools = None
+    if overrides.get("inject_fixture_tools"):
+        tools = minimal_fixture_tool_schemas(extract_tool_names_from_messages(FIXTURE_MESSAGES))
+    payload, _stats = build_codex_compact_payload(FIXTURE_MESSAGES, model=model, tools=tools, **payload_kwargs)
     return payload
 
 
@@ -98,10 +105,14 @@ def build_payload_from_fixture(
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     messages = load_session_messages(fixture)
     overrides = variant_overrides(variant)
-    payload_kwargs = {k: v for k, v in overrides.items() if k != "recent_tail_messages"}
+    payload_kwargs = {k: v for k, v in overrides.items() if k not in {"recent_tail_messages", "inject_fixture_tools"}}
+    tools = None
+    if overrides.get("inject_fixture_tools"):
+        tools = minimal_fixture_tool_schemas(extract_tool_names_from_messages(messages))
     payload, _stats = build_codex_compact_payload(
         messages,
         model=model,
+        tools=tools,
         max_tool_output_chars=max_tool_result_chars,
         token_budget_chars=max_input_item_chars,
         **payload_kwargs,
