@@ -105,6 +105,36 @@ python scripts/smoke_compact.py --auth-mode codex_oauth --execute
 python scripts/smoke_compact.py --auth-mode codex_oauth --fixture tests/fixtures/private/<session>.jsonl --variant preprocessing-parity --execute
 ```
 
+### 2026-04-30 private real-session remote smoke
+
+Ignored private fixture used:
+
+```text
+tests/fixtures/private/context-compression-real.jsonl
+```
+
+Fixture summary:
+
+```text
+messages=107
+content_chars=201,279
+tool_calls=54
+tool_results=54
+```
+
+Remote Codex OAuth smoke was executed for all variants with `gpt-5.5`. Results were stored under ignored `tests/fixtures/private/remote-smoke-20260430/`; do not commit those files.
+
+```text
+variant                replacement_messages  replacement_chars  likely_resumable
+current                3                     2,983              false
+conversion-parity      3                     2,983              false
+payload-parity         3                     2,983              false
+preprocessing-parity   2                     1,234              false
+builtin                103                   33,433             n/a
+```
+
+Takeaway: parity conversion/payload changes made the request shape closer to Codex, but this endpoint still returned selected history items rather than a Hermes-quality resumable handoff summary for this fixture. `preprocessing-parity` was worse because less conservative preprocessing produced an even shorter selected-item replacement. Do not switch production `context.engine` to `codex_compact` based on these results.
+
 Private real-session fixture tests are opt-in:
 
 ```bash

@@ -1184,3 +1184,43 @@ Mitigation:
 ```
 
 The key principle: **before adding custom summary prompting, first make Hermes send compact requests that look much more like actual Codex compact requests.**
+
+---
+
+## 2026-04-30 execution notes
+
+Implemented and pushed the planned milestones:
+
+```text
+184a53e feat: improve codex response replay parity
+c2d14d8 feat: add codex compact prompt parity mode
+07adb6c feat: mirror codex tool-pair preprocessing
+acfc00c feat: compare codex compact parity variants
+```
+
+Validation after implementation:
+
+```text
+73 passed, 1 skipped
+py_compile OK
+plugin discovery: found=True, enabled=True, error=None
+```
+
+Remote Codex OAuth smoke was run against ignored private fixture `tests/fixtures/private/context-compression-real.jsonl` with `gpt-5.5`.
+
+```text
+variant                replacement_messages  replacement_chars  likely_resumable
+current                3                     2,983              false
+conversion-parity      3                     2,983              false
+payload-parity         3                     2,983              false
+preprocessing-parity   2                     1,234              false
+builtin                103                   33,433             n/a
+```
+
+Conclusion: the parity work improved request fidelity, but did not improve handoff quality on this Hermes fixture. The compact endpoint appears to return selected response/history items, not the structured checkpoint summary Hermes needs. `preprocessing-parity` was worse than conservative preprocessing. Keep production `context.engine` unchanged.
+
+Recommended next investigation, if continuing:
+
+1. Add an explicit Hermes handoff post-pass after Codex compact output, or
+2. Change the input to ask compact to summarize a synthesized task log rather than replay raw history items, or
+3. Capture/compare actual Codex `ResponseItem` histories from a native Codex session to determine whether Hermes chat-format export is still too lossy.
