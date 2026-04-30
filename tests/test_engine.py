@@ -48,9 +48,9 @@ def test_engine_compress_uses_client_and_returns_replacement_history():
 
     assert client.payloads
     assert client.payloads[0]["model"] == engine.model
-    assert "Focus especially on: client" in client.payloads[0]["instructions"]
-    assert result[0]["role"] == "system"
-    assert "The task is to build a plugin." in result[1]["content"]
+    assert client.payloads[0]["instructions"] == "rules"
+    assert client.payloads[0]["input"][0]["type"] == "message"
+    assert "The task is to build a plugin." in result[0]["content"]
     assert result[-1]["content"] == "latest"
     assert engine.compression_count == 1
 

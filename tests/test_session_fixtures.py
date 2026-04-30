@@ -73,7 +73,7 @@ def test_real_session_fixture_can_drive_engine_with_fake_client():
 
     assert client.payloads
     assert summarize_messages(messages)["messages"] >= 4
-    assert "Goal: evaluate real session compaction" in replacement[1]["content"]
+    assert any("Goal: evaluate real session compaction" in str(m.get("content", "")) for m in replacement)
     assert replacement[-1]["role"] == "user"
 
 

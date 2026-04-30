@@ -20,9 +20,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from client import CompactClient  # noqa: E402
+from compact_postprocess import compact_response_to_hermes_messages  # noqa: E402
+from compact_preprocess import build_codex_compact_payload, response_item_type_counts  # noqa: E402
 from config import CodexCompactConfig  # noqa: E402
-from conversion import extract_compact_text, hermes_messages_to_compact_payload  # noqa: E402
-from message_ops import build_replacement_history, prepare_for_compact  # noqa: E402
+from message_ops import build_replacement_history  # noqa: E402
 from session_fixtures import load_session_messages, summarize_messages  # noqa: E402
 
 FIXTURE_MESSAGES = [
@@ -34,11 +35,8 @@ FIXTURE_MESSAGES = [
 
 
 def build_payload(model: str, focus_topic: str | None = None) -> dict:
-    return hermes_messages_to_compact_payload(
-        prepare_for_compact(FIXTURE_MESSAGES),
-        model=model,
-        focus_topic=focus_topic,
-    )
+    payload, _stats = build_codex_compact_payload(FIXTURE_MESSAGES, model=model)
+    return payload
 
 
 def build_payload_from_fixture(
@@ -50,11 +48,11 @@ def build_payload_from_fixture(
     max_input_item_chars: int | None = None,
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     messages = load_session_messages(fixture)
-    payload = hermes_messages_to_compact_payload(
-        prepare_for_compact(messages, max_tool_result_chars=max_tool_result_chars),
+    payload, _stats = build_codex_compact_payload(
+        messages,
         model=model,
-        focus_topic=focus_topic,
-        max_content_chars=max_input_item_chars,
+        max_tool_output_chars=max_tool_result_chars,
+        token_budget_chars=max_input_item_chars,
     )
     return payload, messages
 
@@ -105,7 +103,10 @@ def dry_run_summary(
         "payload_summary": {
             "model": payload.get("model"),
             "input_items": len(payload.get("input") or []),
+            "response_item_types": response_item_type_counts(payload.get("input") or []),
             "instruction_chars": len(payload.get("instructions") or ""),
+            "tools": len(payload.get("tools") or []),
+            "parallel_tool_calls": bool(payload.get("parallel_tool_calls")),
         },
         "replacement_preview": _preview_replacement(messages),
     }
@@ -149,16 +150,14 @@ def main(argv: list[str] | None = None) -> int:
 
     config = CodexCompactConfig(auth_mode=args.auth_mode, model=args.model)
     response = CompactClient(config).compact(payload)
-    compact_text = extract_compact_text(response)
-    replacement = build_replacement_history(
+    replacement = compact_response_to_hermes_messages(
+        response,
         messages,
-        compact_text,
         recent_tail_messages=args.recent_tail_messages,
     )
     print(json.dumps({
         "fixture": args.fixture or None,
         "message_summary": summarize_messages(messages),
-        "compact_text": compact_text,
         "replacement": replacement,
     }, ensure_ascii=False, indent=2))
     return 0

@@ -23,13 +23,13 @@ except Exception:  # pragma: no cover - allows local unit tests outside Hermes r
             self.threshold_tokens = int(context_length * self.threshold_percent)
 
 try:
+    from .compact_postprocess import compact_response_to_hermes_messages
+    from .compact_preprocess import build_codex_compact_payload
     from .config import CodexCompactConfig, load_config
-    from .conversion import extract_compact_text, hermes_messages_to_compact_payload
-    from .message_ops import build_replacement_history, prepare_for_compact
 except ImportError:  # pragma: no cover - local test fallback
+    from compact_postprocess import compact_response_to_hermes_messages
+    from compact_preprocess import build_codex_compact_payload
     from config import CodexCompactConfig, load_config
-    from conversion import extract_compact_text, hermes_messages_to_compact_payload
-    from message_ops import build_replacement_history, prepare_for_compact
 
 
 class CodexCompactEngine(ContextEngine):
@@ -109,21 +109,18 @@ class CodexCompactEngine(ContextEngine):
         focus_topic: str = None,
     ) -> List[Dict[str, Any]]:
         try:
-            prepared = prepare_for_compact(
+            payload, _stats = build_codex_compact_payload(
                 messages,
-                max_tool_result_chars=self.config.max_tool_result_chars,
-            )
-            payload = hermes_messages_to_compact_payload(
-                prepared,
                 model=self.model,
-                focus_topic=focus_topic,
-                max_content_chars=self.config.max_input_item_chars,
+                tools=[],
+                parallel_tool_calls=False,
+                max_tool_output_chars=self.config.max_tool_result_chars,
+                token_budget_chars=self.config.max_input_item_chars,
             )
             response = self._client_or_default().compact(payload)
-            compact_text = extract_compact_text(response)
-            replacement = build_replacement_history(
+            replacement = compact_response_to_hermes_messages(
+                response,
                 messages,
-                compact_text,
                 recent_tail_messages=self.config.recent_tail_messages,
             )
             self.compression_count += 1
