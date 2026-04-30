@@ -1087,3 +1087,36 @@ The phase is complete when:
 - Should remote compact fall back to Hermes built-in compressor automatically on poor compression ratio?
 - Can `responses/compact` official OpenAI API key mode produce better output than Codex OAuth for Hermes histories?
 - Should we preserve compact response `function_call` / `function_call_output` items, or always collapse them into text before returning Hermes messages?
+
+
+## 2026-04-30 implementation checkpoint
+
+Implemented and pushed the first Codex-equivalent pipeline slices:
+
+- `responses_conversion.py`: converts Hermes chat messages to Codex-like Responses items.
+- `compact_preprocess.py`: builds compact payloads with structured `input`, `instructions`, `tools`, and `parallel_tool_calls`; truncates/removes oversized tool pairs conservatively.
+- `compact_postprocess.py`: converts structured compact response items back to Hermes chat messages, with `output_text` fallback.
+- `engine.py`: routes `CodexCompactEngine.compress()` through the new structured pipeline.
+- `scripts/smoke_compact.py`: dry-run payload summary now reports ResponseItem type counts.
+
+Verification:
+
+```text
+54 passed, 1 skipped
+py_compile OK
+synthetic dry-run payload types: message=4, function_call=1, function_call_output=1
+```
+
+Real-session smoke using ignored `tests/fixtures/private/context-compression-real.jsonl`:
+
+```text
+original: 107 messages, 201279 content chars
+structured codex result: 3 messages, 2983 chars, ratio 0.015
+built-in result: 103 messages, 36434 chars, ratio 0.181
+```
+
+Interpretation:
+
+- Structured ResponseItem input eliminated the previous giant raw tool-output preservation problem.
+- The remote compact response for this fixture behaved more like selected compacted conversation items than a full checkpoint summary; it preserved early user intent and final assistant implementation report but did not produce a rich built-in-style structured handoff.
+- Next quality work should focus on passing better base instructions/tool schemas and evaluating whether remote compact needs an additional summary post-pass or fallback threshold.

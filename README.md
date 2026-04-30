@@ -8,19 +8,13 @@ This is a PoC. It is intentionally small: conversion helpers, a remote compact c
 
 `CodexCompactEngine.compress()` currently:
 
-1. Lightly prepares Hermes/OpenAI-format messages.
-2. Converts them into a Responses compact payload.
+1. Converts Hermes/OpenAI-format chat messages into Codex-like Responses `ResponseItem` dictionaries.
+2. Builds a Codex-like compact payload with `input`, `instructions`, `tools`, and `parallel_tool_calls`.
 3. Calls a compact endpoint.
-4. Extracts compacted text.
-5. Returns replacement history shaped as:
+4. Prefers structured compact `output` items when present, falling back to `output_text` checkpoint wrapping.
+5. Converts the compacted result back into valid Hermes chat messages, optionally preserving a recent tail.
 
-```text
-[original system/developer messages]
-[user message: compact checkpoint]
-[recent safe tail messages]
-```
-
-The checkpoint message is a historical handoff, not a new user request.
+The plugin deliberately avoids flattening tool calls/results into giant text blobs by default. Tool calls become `function_call` items and tool results become `function_call_output` items before `/responses/compact` is called.
 
 ## Configuration
 
@@ -58,7 +52,7 @@ Run tests from the repo root:
 
 ```bash
 python -m pytest -q
-python -m py_compile __init__.py auth.py client.py config.py conversion.py engine.py message_ops.py session_fixtures.py scripts/export_session_fixture.py scripts/smoke_compact.py tests/*.py
+python -m py_compile __init__.py auth.py client.py config.py conversion.py engine.py message_ops.py responses_conversion.py compact_preprocess.py compact_postprocess.py session_fixtures.py scripts/export_session_fixture.py scripts/smoke_compact.py scripts/compare_builtin_fixture.py tests/*.py
 ```
 
 Dry-run the smoke payload without network access:
