@@ -31,4 +31,5 @@ def build_local_style_payload(remote_payload: Dict[str, Any]) -> Dict[str, Any]:
     input_items.append({"type": "message", "role": "user", "content": compact_prompt})
     payload["input"] = input_items
     payload["store"] = False
+    payload["stream"] = True
     return payload

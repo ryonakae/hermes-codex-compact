@@ -44,10 +44,49 @@ def post_json(url: str, payload: Dict[str, Any], headers: Dict[str, str], timeou
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise RuntimeError("Compact API returned non-JSON response") from exc
+        parsed = parse_sse_response(raw)
+        if parsed is None:
+            raise RuntimeError("Compact API returned non-JSON response") from exc
     if not isinstance(parsed, dict):
         raise RuntimeError("Compact API returned a non-object JSON response")
     return parsed
+
+
+def parse_sse_response(raw: str) -> Optional[Dict[str, Any]]:
+    """Parse a small Responses SSE transcript into a response-like dict."""
+    output_text_parts = []
+    final_response: Optional[Dict[str, Any]] = None
+    saw_sse = False
+    for line in str(raw).splitlines():
+        line = line.strip()
+        if not line.startswith("data:"):
+            continue
+        saw_sse = True
+        payload = line[len("data:"):].strip()
+        if not payload or payload == "[DONE]":
+            continue
+        try:
+            event = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        event_type = str(event.get("type") or "")
+        if event_type.endswith("output_text.delta") and isinstance(event.get("delta"), str):
+            output_text_parts.append(event["delta"])
+        response = event.get("response")
+        if event_type == "response.completed" and isinstance(response, dict):
+            final_response = dict(response)
+        elif isinstance(response, dict) and final_response is None:
+            final_response = dict(response)
+    if not saw_sse:
+        return None
+    output_text = "".join(output_text_parts)
+    if final_response is None:
+        final_response = {}
+    if output_text and not final_response.get("output_text"):
+        final_response["output_text"] = output_text
+    return final_response
 
 
 class CompactClient:
