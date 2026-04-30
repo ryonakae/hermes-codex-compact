@@ -23,6 +23,8 @@ class CodexCompactConfig:
     max_input_item_chars: Optional[int] = None
     message_shape: str = "response_item"
     instruction_policy: str = "all_instructions"
+    missing_tool_output_policy: str = "drop"
+    preprocessing_mode: str = "safe_truncate"
     parallel_tool_calls: bool = False
     reasoning_effort: Optional[str] = None
     reasoning_summary: Optional[str] = None
@@ -65,6 +67,10 @@ def load_config(overrides: Optional[Dict[str, Any]] = None) -> CodexCompactConfi
         raise ValueError(f"Unsupported codex_compact.message_shape: {config.message_shape}")
     if config.instruction_policy not in {"all_instructions", "codex_base_only"}:
         raise ValueError(f"Unsupported codex_compact.instruction_policy: {config.instruction_policy}")
+    if config.missing_tool_output_policy not in {"drop", "keep", "aborted"}:
+        raise ValueError(f"Unsupported codex_compact.missing_tool_output_policy: {config.missing_tool_output_policy}")
+    if config.preprocessing_mode not in {"safe_truncate", "codex_parity"}:
+        raise ValueError(f"Unsupported codex_compact.preprocessing_mode: {config.preprocessing_mode}")
     config.threshold = float(config.threshold)
     config.recent_tail_messages = int(config.recent_tail_messages)
     config.max_tool_result_chars = int(config.max_tool_result_chars)

@@ -37,6 +37,8 @@ codex_compact:
   max_input_item_chars: null
   message_shape: response_item       # response_item | core
   instruction_policy: all_instructions # all_instructions | codex_base_only
+  missing_tool_output_policy: drop # drop | keep | aborted
+  preprocessing_mode: safe_truncate # safe_truncate | codex_parity
   parallel_tool_calls: false
   reasoning_effort: null
   reasoning_summary: null
@@ -58,6 +60,8 @@ Codex OAuth is experimental. The plugin uses Hermes credential resolver helpers 
 - `message_shape: core` makes normal user/assistant/developer inputs use the same `{role, content}` shape as Hermes' Codex Responses adapter. `response_item` keeps the earlier explicit `{type: message, ...}` shape.
 - `instruction_policy: codex_base_only` keeps only system/base instructions in the compact `instructions` field and leaves developer context in `input`, closer to Codex remote compact. `all_instructions` keeps the previous behavior.
 - `parallel_tool_calls`, `reasoning_effort`, `reasoning_summary`, and `verbosity` are passed through to the compact payload when configured.
+- `missing_tool_output_policy: aborted` mirrors Codex-style interrupted tool calls by synthesizing a `function_call_output` with `output: "aborted"` instead of dropping the call.
+- `preprocessing_mode: codex_parity` avoids pre-truncating large tool outputs while the request remains under the configured budget; `safe_truncate` keeps the earlier conservative truncation behavior.
 
 ## Development
 

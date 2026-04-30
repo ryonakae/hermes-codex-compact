@@ -106,6 +106,42 @@ def test_preprocess_truncates_old_large_tool_outputs_before_latest_user():
     assert stats["visible_chars"] <= 1000
 
 
+def test_codex_parity_preprocessing_keeps_tool_output_when_under_budget():
+    output = "x" * 10_000
+    messages = [
+        {"role": "assistant", "tool_calls": [{"id": "call_1", "function": {"name": "terminal", "arguments": "{}"}}], "content": ""},
+        {"role": "tool", "tool_call_id": "call_1", "content": output},
+    ]
+
+    payload, stats = build_codex_compact_payload(
+        messages,
+        model="gpt-5.5",
+        token_budget_chars=20_000,
+        max_tool_output_chars=100,
+        preprocessing_mode="codex_parity",
+    )
+
+    tool_output = next(item for item in payload["input"] if item.get("type") == "function_call_output")
+    assert tool_output["output"] == output
+    assert stats["truncated_tool_outputs"] == 0
+
+
+def test_codex_parity_payload_can_synthesize_aborted_tool_output():
+    messages = [{
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [{"id": "call_1", "function": {"name": "terminal", "arguments": "{}"}}],
+    }]
+
+    payload, _ = build_codex_compact_payload(
+        messages,
+        model="gpt-5.5",
+        missing_tool_output_policy="aborted",
+    )
+
+    assert {"type": "function_call_output", "call_id": "call_1", "output": "aborted"} in payload["input"]
+
+
 def test_trim_removes_old_complete_tool_pairs_when_still_over_budget():
     messages = [
         {"role": "user", "content": "start"},

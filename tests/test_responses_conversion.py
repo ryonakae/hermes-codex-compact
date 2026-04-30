@@ -278,3 +278,22 @@ def test_codex_base_only_policy_keeps_developer_context_in_input():
 
     assert instructions == "base rules"
     assert {"role": "developer", "content": "repo context"} in items
+
+
+def test_missing_tool_output_can_be_synthesized_as_aborted():
+    messages = [{
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [{"id": "call_1", "function": {"name": "terminal", "arguments": "{}"}}],
+    }]
+
+    items, _ = hermes_messages_to_response_items(
+        messages,
+        drop_incomplete_tool_pairs=False,
+        missing_tool_output_policy="aborted",
+    )
+
+    assert items == [
+        {"type": "function_call", "call_id": "call_1", "name": "terminal", "arguments": "{}"},
+        {"type": "function_call_output", "call_id": "call_1", "output": "aborted"},
+    ]

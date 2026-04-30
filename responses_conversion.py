@@ -16,6 +16,7 @@ _MEDIA_TYPES = {"image", "input_image", "image_url", "input_audio", "audio", "fi
 _RESPONSE_MESSAGE_STATUSES = {"completed", "incomplete", "in_progress"}
 _MESSAGE_SHAPES = {"response_item", "core"}
 _INSTRUCTION_POLICIES = {"all_instructions", "codex_base_only"}
+_MISSING_TOOL_OUTPUT_POLICIES = {"drop", "keep", "aborted"}
 
 
 def deterministic_call_id(name: str, arguments: str, index: int = 0) -> str:
@@ -247,6 +248,32 @@ def replay_codex_message_items(message: Dict[str, Any]) -> List[Dict[str, Any]]:
     return replayed
 
 
+def synthesize_missing_tool_outputs(
+    items: List[Dict[str, Any]],
+    *,
+    policy: str,
+) -> List[Dict[str, Any]]:
+    if policy == "keep":
+        return list(items)
+    if policy == "drop":
+        return sanitize_response_tool_pairs(items, drop_incomplete_tool_pairs=True)
+    if policy != "aborted":
+        raise ValueError(f"Unsupported missing_tool_output_policy: {policy}")
+
+    result: List[Dict[str, Any]] = []
+    output_ids = {str(item.get("call_id")) for item in items if item.get("type") == "function_call_output" and item.get("call_id")}
+    call_ids = {str(item.get("call_id")) for item in items if item.get("type") == "function_call" and item.get("call_id")}
+    for item in items:
+        if item.get("type") == "function_call_output" and str(item.get("call_id")) not in call_ids:
+            continue
+        result.append(item)
+        if item.get("type") == "function_call" and item.get("call_id"):
+            call_id = str(item["call_id"])
+            if call_id not in output_ids:
+                result.append({"type": "function_call_output", "call_id": call_id, "output": "aborted"})
+    return result
+
+
 def sanitize_response_tool_pairs(
     items: List[Dict[str, Any]],
     *,
@@ -279,6 +306,7 @@ def hermes_messages_to_response_items(
     max_tool_output_chars: Optional[int] = None,
     message_shape: str = "response_item",
     instruction_policy: str = "all_instructions",
+    missing_tool_output_policy: str = "drop",
 ) -> Tuple[List[Dict[str, Any]], str]:
     """Convert Hermes chat messages to Codex-like Responses input items.
 
@@ -289,6 +317,8 @@ def hermes_messages_to_response_items(
         raise ValueError(f"Unsupported message_shape: {message_shape}")
     if instruction_policy not in _INSTRUCTION_POLICIES:
         raise ValueError(f"Unsupported instruction_policy: {instruction_policy}")
+    if missing_tool_output_policy not in _MISSING_TOOL_OUTPUT_POLICIES:
+        raise ValueError(f"Unsupported missing_tool_output_policy: {missing_tool_output_policy}")
 
     items: List[Dict[str, Any]] = []
     instructions: List[str] = []
@@ -353,4 +383,7 @@ def hermes_messages_to_response_items(
                 output = f"{output[:max_tool_output_chars]}\n[... truncated {omitted} chars ...]"
             items.append({"type": "function_call_output", "call_id": call_id.strip(), "output": output})
 
+    if missing_tool_output_policy == "drop":
+        return sanitize_response_tool_pairs(items, drop_incomplete_tool_pairs=drop_incomplete_tool_pairs), "\n\n".join(instructions)
+    items = synthesize_missing_tool_outputs(items, policy=missing_tool_output_policy)
     return sanitize_response_tool_pairs(items, drop_incomplete_tool_pairs=drop_incomplete_tool_pairs), "\n\n".join(instructions)

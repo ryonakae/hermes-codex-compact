@@ -128,6 +128,8 @@ class CodexCompactEngine(ContextEngine):
                 token_budget_chars=self.config.max_input_item_chars,
                 message_shape=self.config.message_shape,
                 instruction_policy=self.config.instruction_policy,
+                missing_tool_output_policy=self.config.missing_tool_output_policy,
+                preprocessing_mode=self.config.preprocessing_mode,
             )
             response = self._client_or_default().compact(payload)
             replacement = compact_response_to_hermes_messages(

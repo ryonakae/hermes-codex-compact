@@ -162,17 +162,25 @@ def build_codex_compact_payload(
     token_budget_chars: Optional[int] = None,
     message_shape: str = "response_item",
     instruction_policy: str = "all_instructions",
+    missing_tool_output_policy: str = "drop",
+    preprocessing_mode: str = "safe_truncate",
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     items, instructions = hermes_messages_to_response_items(
         messages,
         drop_incomplete_tool_pairs=False,
         message_shape=message_shape,
         instruction_policy=instruction_policy,
+        missing_tool_output_policy=missing_tool_output_policy,
     )
-    items, truncated_outputs = truncate_large_function_outputs(
-        items,
-        max_tool_output_chars=max_tool_output_chars,
-    )
+    if preprocessing_mode not in {"safe_truncate", "codex_parity"}:
+        raise ValueError(f"Unsupported preprocessing_mode: {preprocessing_mode}")
+    if preprocessing_mode == "safe_truncate":
+        items, truncated_outputs = truncate_large_function_outputs(
+            items,
+            max_tool_output_chars=max_tool_output_chars,
+        )
+    else:
+        truncated_outputs = 0
     items, removed_pairs = trim_response_items_to_budget(
         items,
         budget_chars=token_budget_chars,
