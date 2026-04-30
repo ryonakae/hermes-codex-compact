@@ -98,6 +98,21 @@ def test_focus_topic_is_reflected_as_compaction_context_not_raw_history():
     assert payload["input"][0].get("content") != "resume the Codex compact quality implementation"
 
 
+def test_local_style_smoke_path_appends_compact_prompt():
+    fixture = Path(__file__).parent / "fixtures" / "synthetic_session.jsonl"
+
+    payload, _messages = build_payload_from_fixture(
+        fixture,
+        model="gpt-test",
+        focus_topic=None,
+        variant="instructed-tools-remote",
+        compact_path="local-style",
+    )
+
+    assert "CONTEXT CHECKPOINT COMPACTION" in payload["input"][-1]["content"]
+    assert payload["input"][-1]["role"] == "user"
+
+
 def test_smoke_payload_variant_changes_message_shape():
     fixture = Path(__file__).parent / "fixtures" / "synthetic_session.jsonl"
 

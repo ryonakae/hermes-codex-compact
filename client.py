@@ -67,13 +67,19 @@ class CompactClient:
         self._codex_header_builder = codex_header_builder
 
     def compact(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return self._post(payload, compact=True)
+
+    def responses(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return self._post(payload, compact=False)
+
+    def _post(self, payload: Dict[str, Any], *, compact: bool) -> Dict[str, Any]:
         try:
             if self.config.auth_mode == "api_key":
-                url, headers = self._api_key_request()
+                url, headers = self._api_key_request(compact=compact)
             elif self.config.auth_mode == "codex_oauth":
-                url, headers = self._codex_oauth_request()
+                url, headers = self._codex_oauth_request(compact=compact)
             elif self.config.auth_mode == "auto":
-                url, headers = self._auto_request()
+                url, headers = self._auto_request(compact=compact)
             else:
                 raise ValueError(f"Unsupported auth_mode: {self.config.auth_mode}")
             return self._post_json(url, payload, headers, self.config.request_timeout_seconds)
@@ -86,24 +92,26 @@ class CompactClient:
                 raise RuntimeError(message) from exc
             raise
 
-    def _api_key_request(self) -> tuple[str, Dict[str, str]]:
+    def _api_key_request(self, *, compact: bool = True) -> tuple[str, Dict[str, str]]:
         api_key = self.config.openai_api_key or os.environ.get("OPENAI_API_KEY", "")
         if not api_key:
             raise ValueError("OPENAI_API_KEY is required for codex_compact auth_mode=api_key")
         base_url = (self.config.openai_base_url or "https://api.openai.com/v1").rstrip("/")
-        return f"{base_url}/responses/compact", {
+        endpoint = "responses/compact" if compact else "responses"
+        return f"{base_url}/{endpoint}", {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
 
-    def _codex_oauth_request(self) -> tuple[str, Dict[str, str]]:
+    def _codex_oauth_request(self, *, compact: bool = True) -> tuple[str, Dict[str, str]]:
         creds = resolve_codex_credentials(self._codex_resolver)
         token = creds["api_key"]
         base_url = (creds.get("base_url") or "https://chatgpt.com/backend-api/codex").rstrip("/")
         headers = build_codex_headers(token, self._codex_header_builder)
-        return f"{base_url}/responses/compact", headers
+        endpoint = "responses/compact" if compact else "responses"
+        return f"{base_url}/{endpoint}", headers
 
-    def _auto_request(self) -> tuple[str, Dict[str, str]]:
+    def _auto_request(self, *, compact: bool = True) -> tuple[str, Dict[str, str]]:
         if self.config.openai_api_key or os.environ.get("OPENAI_API_KEY"):
-            return self._api_key_request()
-        return self._codex_oauth_request()
+            return self._api_key_request(compact=compact)
+        return self._codex_oauth_request(compact=compact)

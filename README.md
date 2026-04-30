@@ -99,6 +99,7 @@ python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.js
 python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.jsonl --variant preprocessing-parity
 python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.jsonl --variant instructed-remote
 python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.jsonl --variant instructed-tools-remote
+python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.jsonl --variant instructed-tools-remote --compact-path local-style
 ```
 
 `instructed-remote` keeps the remote `/responses/compact` path but fills `instructions` with a Hermes/Codex compact base instruction when the fixture has no system/developer messages. Use it to test whether the prior poor output was caused by sending `instructions: ""`.
@@ -106,6 +107,8 @@ python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.js
 `instructed-tools-remote` additionally injects minimal Responses-compatible function tool schemas inferred from fixture tool calls. This is still a smoke-test approximation, not the final Hermes active tool registry integration.
 
 `--focus-topic` is appended to `instructions` as a short compaction focus, rather than inserted as a synthetic history item. This keeps the fixture history faithful while letting smoke runs bias the handoff toward a specific continuation task.
+
+`--compact-path local-style` keeps the same fixture preprocessing but appends Codex's explicit checkpoint prompt and sends the payload through the normal Responses path when `--execute` is used. This lets us compare `/responses/compact` against the prompt-based compaction behavior people may associate with Codex.
 
 Actually call the remote API only when you intend to spend tokens / use OAuth credentials:
 

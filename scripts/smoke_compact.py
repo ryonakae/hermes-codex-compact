@@ -23,6 +23,7 @@ from client import CompactClient  # noqa: E402
 from compact_postprocess import compact_response_to_hermes_messages  # noqa: E402
 from compact_preprocess import build_codex_compact_payload, response_item_type_counts  # noqa: E402
 from config import CodexCompactConfig  # noqa: E402
+from local_style_compact import build_local_style_payload  # noqa: E402
 from message_ops import build_replacement_history  # noqa: E402
 from session_fixtures import load_session_messages, summarize_messages  # noqa: E402
 from tool_schemas import extract_tool_names_from_messages, minimal_fixture_tool_schemas  # noqa: E402
@@ -100,14 +101,17 @@ def evaluate_handoff_quality(text: str) -> Dict[str, bool]:
     }
 
 
-def build_payload(model: str, focus_topic: str | None = None, *, variant: str = "current") -> dict:
+def build_payload(model: str, focus_topic: str | None = None, *, variant: str = "current", compact_path: str = "remote") -> dict:
     overrides = variant_overrides(variant)
     payload_kwargs = {k: v for k, v in overrides.items() if k not in {"recent_tail_messages", "inject_fixture_tools"}}
     tools = None
     if overrides.get("inject_fixture_tools"):
         tools = minimal_fixture_tool_schemas(extract_tool_names_from_messages(FIXTURE_MESSAGES))
     payload, _stats = build_codex_compact_payload(FIXTURE_MESSAGES, model=model, tools=tools, **payload_kwargs)
-    return apply_focus_topic(payload, focus_topic)
+    payload = apply_focus_topic(payload, focus_topic)
+    if compact_path == "local-style":
+        payload = build_local_style_payload(payload)
+    return payload
 
 
 def build_payload_from_fixture(
@@ -118,6 +122,7 @@ def build_payload_from_fixture(
     max_tool_result_chars: int = 4000,
     max_input_item_chars: int | None = None,
     variant: str = "current",
+    compact_path: str = "remote",
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     messages = load_session_messages(fixture)
     overrides = variant_overrides(variant)
@@ -133,7 +138,10 @@ def build_payload_from_fixture(
         token_budget_chars=max_input_item_chars,
         **payload_kwargs,
     )
-    return apply_focus_topic(payload, focus_topic), messages
+    payload = apply_focus_topic(payload, focus_topic)
+    if compact_path == "local-style":
+        payload = build_local_style_payload(payload)
+    return payload, messages
 
 
 def _preview_replacement(messages: List[Dict[str, Any]], recent_tail_messages: int = 2) -> List[Dict[str, Any]]:
@@ -203,6 +211,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--focus-topic", default="")
     parser.add_argument("--fixture", default="", help="Optional JSONL fixture exported from a Hermes session")
     parser.add_argument("--variant", choices=sorted(VARIANTS), default="current", help="Payload/preprocessing parity variant for A/B smoke")
+    parser.add_argument("--compact-path", choices=["remote", "local-style"], default="remote", help="Use /responses/compact payload or normal Responses local-style checkpoint prompt")
     parser.add_argument("--recent-tail-messages", type=int, default=None)
     parser.add_argument("--max-tool-result-chars", type=int, default=4000)
     parser.add_argument("--max-input-item-chars", type=int, default=0)
@@ -218,10 +227,11 @@ def main(argv: list[str] | None = None) -> int:
             max_tool_result_chars=args.max_tool_result_chars,
             max_input_item_chars=args.max_input_item_chars or None,
             variant=args.variant,
+            compact_path=args.compact_path,
         )
     else:
         messages = FIXTURE_MESSAGES
-        payload = build_payload(args.model, args.focus_topic or None, variant=args.variant)
+        payload = build_payload(args.model, args.focus_topic or None, variant=args.variant, compact_path=args.compact_path)
 
     overrides = variant_overrides(args.variant)
     recent_tail_messages = args.recent_tail_messages
@@ -230,19 +240,27 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.execute:
         print(json.dumps(
-            dry_run_summary(payload, messages, fixture=args.fixture or None, compare_builtin=args.compare_builtin, variant=args.variant),
+            dry_run_summary(payload, messages, fixture=args.fixture or None, compare_builtin=args.compare_builtin, variant=f"{args.variant}:{args.compact_path}"),
             ensure_ascii=False,
             indent=2,
         ))
         return 0
 
     config = CodexCompactConfig(auth_mode=args.auth_mode, model=args.model)
-    response = CompactClient(config).compact(payload)
-    replacement = compact_response_to_hermes_messages(
-        response,
-        messages,
-        recent_tail_messages=recent_tail_messages,
-    )
+    client = CompactClient(config)
+    if args.compact_path == "local-style":
+        response = client.responses(payload)
+        output_text = response.get("output_text") or ""
+        if not output_text:
+            output_text = json.dumps(response.get("output") or response, ensure_ascii=False)
+        replacement = [{"role": "assistant", "content": str(output_text)}]
+    else:
+        response = client.compact(payload)
+        replacement = compact_response_to_hermes_messages(
+            response,
+            messages,
+            recent_tail_messages=recent_tail_messages,
+        )
     replacement_text = "\n".join(str(message.get("content", "")) for message in replacement)
     print(json.dumps({
         "fixture": args.fixture or None,
