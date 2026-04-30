@@ -34,6 +34,13 @@ codex_compact:
   threshold: 0.85
   recent_tail_messages: 8
   max_tool_result_chars: 4000
+  max_input_item_chars: null
+  message_shape: response_item       # response_item | core
+  instruction_policy: all_instructions # all_instructions | codex_base_only
+  parallel_tool_calls: false
+  reasoning_effort: null
+  reasoning_summary: null
+  verbosity: null
   request_timeout_seconds: 120
   debug_dump: false
 ```
@@ -45,6 +52,12 @@ codex_compact:
 - `auto`: prefers API key if available, otherwise Codex OAuth.
 
 Codex OAuth is experimental. The plugin uses Hermes credential resolver helpers and does not read `~/.hermes/auth.json` or `~/.codex/auth.json` directly.
+
+### Codex parity knobs
+
+- `message_shape: core` makes normal user/assistant/developer inputs use the same `{role, content}` shape as Hermes' Codex Responses adapter. `response_item` keeps the earlier explicit `{type: message, ...}` shape.
+- `instruction_policy: codex_base_only` keeps only system/base instructions in the compact `instructions` field and leaves developer context in `input`, closer to Codex remote compact. `all_instructions` keeps the previous behavior.
+- `parallel_tool_calls`, `reasoning_effort`, `reasoning_summary`, and `verbosity` are passed through to the compact payload when configured.
 
 ## Development
 

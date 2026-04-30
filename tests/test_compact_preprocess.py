@@ -2,6 +2,7 @@ from compact_preprocess import (
     build_codex_compact_payload,
     estimate_response_item_visible_chars,
     response_item_type_counts,
+    responses_tools_from_chat_tools,
 )
 
 
@@ -23,6 +24,47 @@ def test_payload_uses_response_items_and_base_instructions():
     assert stats["response_item_types"] == {"message": 1}
 
 
+def test_payload_can_use_core_message_shape_and_codex_base_instruction_policy():
+    messages = [
+        {"role": "system", "content": "base rules"},
+        {"role": "developer", "content": "repo context"},
+        {"role": "user", "content": "hello"},
+    ]
+
+    payload, stats = build_codex_compact_payload(
+        messages,
+        model="gpt-5.5",
+        message_shape="core",
+        instruction_policy="codex_base_only",
+    )
+
+    assert payload["instructions"] == "base rules"
+    assert {"role": "developer", "content": "repo context"} in payload["input"]
+    assert {"role": "user", "content": "hello"} in payload["input"]
+    assert stats["response_item_types"] == {"developer": 1, "user": 1}
+
+
+def test_chat_tool_schema_converts_to_responses_function_tool():
+    tools = [{
+        "type": "function",
+        "function": {
+            "name": "terminal",
+            "description": "Run shell commands",
+            "parameters": {"type": "object", "properties": {"command": {"type": "string"}}},
+        },
+    }]
+
+    converted = responses_tools_from_chat_tools(tools)
+
+    assert converted == [{
+        "type": "function",
+        "name": "terminal",
+        "description": "Run shell commands",
+        "strict": False,
+        "parameters": {"type": "object", "properties": {"command": {"type": "string"}}},
+    }]
+
+
 def test_payload_accepts_tools_parallel_reasoning_and_text_controls():
     messages = [{"role": "user", "content": "hello"}]
     tools = [{"type": "function", "name": "terminal", "parameters": {"type": "object"}}]
@@ -36,7 +78,7 @@ def test_payload_accepts_tools_parallel_reasoning_and_text_controls():
         text={"verbosity": "low"},
     )
 
-    assert payload["tools"] == tools
+    assert payload["tools"] == [{"type": "function", "name": "terminal", "description": "", "strict": False, "parameters": {"type": "object"}}]
     assert payload["parallel_tool_calls"] is True
     assert payload["reasoning"] == {"effort": "low"}
     assert payload["text"] == {"verbosity": "low"}

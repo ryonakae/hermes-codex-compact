@@ -109,13 +109,25 @@ class CodexCompactEngine(ContextEngine):
         focus_topic: str = None,
     ) -> List[Dict[str, Any]]:
         try:
+            reasoning = None
+            if self.config.reasoning_effort or self.config.reasoning_summary:
+                reasoning = {}
+                if self.config.reasoning_effort:
+                    reasoning["effort"] = self.config.reasoning_effort
+                if self.config.reasoning_summary:
+                    reasoning["summary"] = self.config.reasoning_summary
+            text = {"verbosity": self.config.verbosity} if self.config.verbosity else None
             payload, _stats = build_codex_compact_payload(
                 messages,
                 model=self.model,
                 tools=[],
-                parallel_tool_calls=False,
+                parallel_tool_calls=self.config.parallel_tool_calls,
+                reasoning=reasoning,
+                text=text,
                 max_tool_output_chars=self.config.max_tool_result_chars,
                 token_budget_chars=self.config.max_input_item_chars,
+                message_shape=self.config.message_shape,
+                instruction_policy=self.config.instruction_policy,
             )
             response = self._client_or_default().compact(payload)
             replacement = compact_response_to_hermes_messages(

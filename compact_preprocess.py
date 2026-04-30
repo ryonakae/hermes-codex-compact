@@ -14,9 +14,42 @@ except ImportError:  # pragma: no cover - local test fallback
 def response_item_type_counts(items: List[Dict[str, Any]]) -> Dict[str, int]:
     counts: Dict[str, int] = {}
     for item in items:
-        item_type = str(item.get("type") or "unknown")
+        item_type = str(item.get("type") or item.get("role") or "unknown")
         counts[item_type] = counts.get(item_type, 0) + 1
     return counts
+
+
+def responses_tools_from_chat_tools(tools: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """Convert OpenAI chat-completions tool schemas to Responses function tools."""
+    converted: List[Dict[str, Any]] = []
+    for item in tools or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "function" and isinstance(item.get("name"), str):
+            parameters = item.get("parameters")
+            converted.append({
+                "type": "function",
+                "name": item["name"].strip(),
+                "description": str(item.get("description") or ""),
+                "strict": bool(item.get("strict", False)),
+                "parameters": parameters if isinstance(parameters, dict) else {"type": "object", "properties": {}},
+            })
+            continue
+        function = item.get("function")
+        if not isinstance(function, dict):
+            continue
+        name = function.get("name")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        parameters = function.get("parameters")
+        converted.append({
+            "type": "function",
+            "name": name.strip(),
+            "description": str(function.get("description") or ""),
+            "strict": bool(function.get("strict", False)),
+            "parameters": parameters if isinstance(parameters, dict) else {"type": "object", "properties": {}},
+        })
+    return converted
 
 
 def estimate_response_item_visible_chars(item: Dict[str, Any]) -> int:
@@ -29,6 +62,13 @@ def estimate_response_item_visible_chars(item: Dict[str, Any]) -> int:
             elif part is not None:
                 total += len(str(part))
         return total
+    if item_type is None and item.get("role") in {"user", "assistant", "developer"}:
+        content = item.get("content", "")
+        if isinstance(content, str):
+            return len(content)
+        if isinstance(content, list):
+            return sum(len(str(part.get("text") or part)) if isinstance(part, dict) else len(str(part)) for part in content)
+        return len(str(content))
     if item_type == "function_call":
         return len(str(item.get("name") or "")) + len(str(item.get("arguments") or ""))
     if item_type == "function_call_output":
@@ -69,7 +109,7 @@ def truncate_large_function_outputs(
 def _latest_user_index(items: List[Dict[str, Any]]) -> Optional[int]:
     for index in range(len(items) - 1, -1, -1):
         item = items[index]
-        if item.get("type") == "message" and item.get("role") == "user":
+        if item.get("role") == "user" and item.get("type") in {None, "message"}:
             return index
     return None
 
@@ -120,10 +160,14 @@ def build_codex_compact_payload(
     text: Optional[Dict[str, Any]] = None,
     max_tool_output_chars: Optional[int] = None,
     token_budget_chars: Optional[int] = None,
+    message_shape: str = "response_item",
+    instruction_policy: str = "all_instructions",
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     items, instructions = hermes_messages_to_response_items(
         messages,
         drop_incomplete_tool_pairs=False,
+        message_shape=message_shape,
+        instruction_policy=instruction_policy,
     )
     items, truncated_outputs = truncate_large_function_outputs(
         items,
@@ -136,11 +180,12 @@ def build_codex_compact_payload(
     )
     items = sanitize_response_tool_pairs(items, drop_incomplete_tool_pairs=True)
 
+    responses_tools = responses_tools_from_chat_tools(tools)
     payload: Dict[str, Any] = {
         "model": model,
         "input": items,
         "instructions": instructions,
-        "tools": list(tools or []),
+        "tools": responses_tools,
         "parallel_tool_calls": bool(parallel_tool_calls),
     }
     if reasoning is not None:

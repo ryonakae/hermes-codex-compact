@@ -21,6 +21,12 @@ class CodexCompactConfig:
     recent_tail_messages: int = 8
     max_tool_result_chars: int = 4000
     max_input_item_chars: Optional[int] = None
+    message_shape: str = "response_item"
+    instruction_policy: str = "all_instructions"
+    parallel_tool_calls: bool = False
+    reasoning_effort: Optional[str] = None
+    reasoning_summary: Optional[str] = None
+    verbosity: Optional[str] = None
     request_timeout_seconds: int = 120
     debug_dump: bool = False
     openai_api_key: str = ""
@@ -55,9 +61,14 @@ def load_config(overrides: Optional[Dict[str, Any]] = None) -> CodexCompactConfi
             setattr(config, key, value)
     if config.auth_mode not in {"api_key", "codex_oauth", "auto"}:
         raise ValueError(f"Unsupported codex_compact.auth_mode: {config.auth_mode}")
+    if config.message_shape not in {"response_item", "core"}:
+        raise ValueError(f"Unsupported codex_compact.message_shape: {config.message_shape}")
+    if config.instruction_policy not in {"all_instructions", "codex_base_only"}:
+        raise ValueError(f"Unsupported codex_compact.instruction_policy: {config.instruction_policy}")
     config.threshold = float(config.threshold)
     config.recent_tail_messages = int(config.recent_tail_messages)
     config.max_tool_result_chars = int(config.max_tool_result_chars)
+    config.parallel_tool_calls = bool(config.parallel_tool_calls)
     config.request_timeout_seconds = int(config.request_timeout_seconds)
     if config.max_input_item_chars is not None:
         config.max_input_item_chars = int(config.max_input_item_chars)

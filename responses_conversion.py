@@ -15,6 +15,7 @@ _TEXT_TYPES = {"text", "input_text", "output_text"}
 _MEDIA_TYPES = {"image", "input_image", "image_url", "input_audio", "audio", "file", "attachment"}
 _RESPONSE_MESSAGE_STATUSES = {"completed", "incomplete", "in_progress"}
 _MESSAGE_SHAPES = {"response_item", "core"}
+_INSTRUCTION_POLICIES = {"all_instructions", "codex_base_only"}
 
 
 def deterministic_call_id(name: str, arguments: str, index: int = 0) -> str:
@@ -277,6 +278,7 @@ def hermes_messages_to_response_items(
     drop_incomplete_tool_pairs: bool = True,
     max_tool_output_chars: Optional[int] = None,
     message_shape: str = "response_item",
+    instruction_policy: str = "all_instructions",
 ) -> Tuple[List[Dict[str, Any]], str]:
     """Convert Hermes chat messages to Codex-like Responses input items.
 
@@ -285,6 +287,8 @@ def hermes_messages_to_response_items(
     """
     if message_shape not in _MESSAGE_SHAPES:
         raise ValueError(f"Unsupported message_shape: {message_shape}")
+    if instruction_policy not in _INSTRUCTION_POLICIES:
+        raise ValueError(f"Unsupported instruction_policy: {instruction_policy}")
 
     items: List[Dict[str, Any]] = []
     instructions: List[str] = []
@@ -297,9 +301,14 @@ def hermes_messages_to_response_items(
         role = message.get("role")
         if role in MESSAGE_ROLES_WITH_INSTRUCTIONS:
             text = _instruction_text(message.get("content"))
-            if text:
+            if text and not (instruction_policy == "codex_base_only" and role == "developer"):
                 label = "Developer context" if role == "developer" else ""
                 instructions.append(f"[{label}]\n{text}" if label else text)
+            elif text:
+                if message_shape == "core":
+                    items.append({"role": str(role), "content": text})
+                else:
+                    items.append({"type": "message", "role": str(role), "content": [{"type": "input_text", "text": text}]})
             continue
 
         if role in {"user", "assistant"}:

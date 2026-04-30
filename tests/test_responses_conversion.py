@@ -261,3 +261,20 @@ def test_response_item_message_shape_remains_supported():
     items, _ = hermes_messages_to_response_items(messages, message_shape="response_item")
 
     assert items[0]["type"] == "message"
+
+
+def test_codex_base_only_policy_keeps_developer_context_in_input():
+    messages = [
+        {"role": "system", "content": "base rules"},
+        {"role": "developer", "content": "repo context"},
+        {"role": "user", "content": "do it"},
+    ]
+
+    items, instructions = hermes_messages_to_response_items(
+        messages,
+        message_shape="core",
+        instruction_policy="codex_base_only",
+    )
+
+    assert instructions == "base rules"
+    assert {"role": "developer", "content": "repo context"} in items
