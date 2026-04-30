@@ -89,6 +89,12 @@ python scripts/smoke_compact.py \
   --fixture tests/fixtures/private/<session-id>.jsonl \
   --focus-topic "context compression" \
   --compare-builtin
+
+# Compare parity variants without network access.
+python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.jsonl --variant current
+python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.jsonl --variant conversion-parity
+python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.jsonl --variant payload-parity
+python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.jsonl --variant preprocessing-parity
 ```
 
 Actually call the remote API only when you intend to spend tokens / use OAuth credentials:
@@ -96,7 +102,7 @@ Actually call the remote API only when you intend to spend tokens / use OAuth cr
 ```bash
 python scripts/smoke_compact.py --auth-mode api_key --execute
 python scripts/smoke_compact.py --auth-mode codex_oauth --execute
-python scripts/smoke_compact.py --auth-mode codex_oauth --fixture tests/fixtures/private/<session>.jsonl --execute
+python scripts/smoke_compact.py --auth-mode codex_oauth --fixture tests/fixtures/private/<session>.jsonl --variant preprocessing-parity --execute
 ```
 
 Private real-session fixture tests are opt-in:

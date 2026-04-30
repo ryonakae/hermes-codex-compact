@@ -26,6 +26,8 @@ from config import CodexCompactConfig  # noqa: E402
 from message_ops import build_replacement_history  # noqa: E402
 from session_fixtures import load_session_messages, summarize_messages  # noqa: E402
 
+VARIANTS = {"current", "conversion-parity", "payload-parity", "preprocessing-parity"}
+
 FIXTURE_MESSAGES = [
     {"role": "system", "content": "You are Hermes, a helpful coding agent."},
     {"role": "user", "content": "Build a tiny Hermes ContextEngine plugin."},
@@ -34,8 +36,50 @@ FIXTURE_MESSAGES = [
 ]
 
 
-def build_payload(model: str, focus_topic: str | None = None) -> dict:
-    payload, _stats = build_codex_compact_payload(FIXTURE_MESSAGES, model=model)
+def variant_overrides(variant: str) -> Dict[str, Any]:
+    if variant not in VARIANTS:
+        raise ValueError(f"Unsupported smoke variant: {variant}")
+    overrides: Dict[str, Any] = {}
+    if variant in {"conversion-parity", "payload-parity", "preprocessing-parity"}:
+        overrides["message_shape"] = "core"
+    if variant in {"payload-parity", "preprocessing-parity"}:
+        overrides["instruction_policy"] = "codex_base_only"
+        overrides["parallel_tool_calls"] = True
+    if variant == "preprocessing-parity":
+        overrides["missing_tool_output_policy"] = "aborted"
+        overrides["preprocessing_mode"] = "codex_parity"
+        overrides["recent_tail_messages"] = 0
+    return overrides
+
+
+def evaluate_handoff_quality(text: str) -> Dict[str, bool]:
+    text = text or ""
+    lower = text.lower()
+    has_active_task = "active task" in lower or "## active" in lower
+    has_completed_actions = "completed actions" in lower or "completed" in lower
+    has_remaining_work = "remaining work" in lower or "next steps" in lower or "todo" in lower
+    has_relevant_files = "relevant files" in lower or ".py" in lower or ".md" in lower
+    has_latest_user_direction = "latest user" in lower or "user direction" in lower or "直近" in text
+    mentions_commit = "commit" in lower or "push" in lower
+    skill_view_dump_detected = "skill_view" in lower and len(text) > 5000
+    raw_tool_dump_detected = len(text) > 8000 and any(marker in lower for marker in ("tool output", "skill_view", "traceback", "total output lines"))
+    likely_resumable = has_active_task and has_completed_actions and has_remaining_work and not raw_tool_dump_detected
+    return {
+        "has_active_task": has_active_task,
+        "has_completed_actions": has_completed_actions,
+        "has_remaining_work": has_remaining_work,
+        "has_relevant_files": has_relevant_files,
+        "has_latest_user_direction": has_latest_user_direction,
+        "mentions_commit": mentions_commit,
+        "raw_tool_dump_detected": raw_tool_dump_detected,
+        "skill_view_dump_detected": skill_view_dump_detected,
+        "likely_resumable": likely_resumable,
+    }
+
+
+def build_payload(model: str, focus_topic: str | None = None, *, variant: str = "current") -> dict:
+    overrides = variant_overrides(variant)
+    payload, _stats = build_codex_compact_payload(FIXTURE_MESSAGES, model=model, **{k: v for k, v in overrides.items() if k != "recent_tail_messages"})
     return payload
 
 
@@ -46,13 +90,17 @@ def build_payload_from_fixture(
     focus_topic: str | None = None,
     max_tool_result_chars: int = 4000,
     max_input_item_chars: int | None = None,
+    variant: str = "current",
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     messages = load_session_messages(fixture)
+    overrides = variant_overrides(variant)
+    payload_kwargs = {k: v for k, v in overrides.items() if k != "recent_tail_messages"}
     payload, _stats = build_codex_compact_payload(
         messages,
         model=model,
         max_tool_output_chars=max_tool_result_chars,
         token_budget_chars=max_input_item_chars,
+        **payload_kwargs,
     )
     return payload, messages
 
@@ -95,9 +143,11 @@ def dry_run_summary(
     *,
     fixture: str | Path | None = None,
     compare_builtin: bool = False,
+    variant: str = "current",
 ) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "dry_run": True,
+        "variant": variant,
         "fixture": str(fixture) if fixture else None,
         "message_summary": summarize_messages(messages),
         "payload_summary": {
@@ -121,7 +171,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", default="gpt-5.1-codex")
     parser.add_argument("--focus-topic", default="")
     parser.add_argument("--fixture", default="", help="Optional JSONL fixture exported from a Hermes session")
-    parser.add_argument("--recent-tail-messages", type=int, default=2)
+    parser.add_argument("--variant", choices=sorted(VARIANTS), default="current", help="Payload/preprocessing parity variant for A/B smoke")
+    parser.add_argument("--recent-tail-messages", type=int, default=None)
     parser.add_argument("--max-tool-result-chars", type=int, default=4000)
     parser.add_argument("--max-input-item-chars", type=int, default=0)
     parser.add_argument("--compare-builtin", action="store_true", help="Report built-in compressor comparability without changing runtime config")
@@ -135,14 +186,20 @@ def main(argv: list[str] | None = None) -> int:
             focus_topic=args.focus_topic or None,
             max_tool_result_chars=args.max_tool_result_chars,
             max_input_item_chars=args.max_input_item_chars or None,
+            variant=args.variant,
         )
     else:
         messages = FIXTURE_MESSAGES
-        payload = build_payload(args.model, args.focus_topic or None)
+        payload = build_payload(args.model, args.focus_topic or None, variant=args.variant)
+
+    overrides = variant_overrides(args.variant)
+    recent_tail_messages = args.recent_tail_messages
+    if recent_tail_messages is None:
+        recent_tail_messages = int(overrides.get("recent_tail_messages", 2))
 
     if not args.execute:
         print(json.dumps(
-            dry_run_summary(payload, messages, fixture=args.fixture or None, compare_builtin=args.compare_builtin),
+            dry_run_summary(payload, messages, fixture=args.fixture or None, compare_builtin=args.compare_builtin, variant=args.variant),
             ensure_ascii=False,
             indent=2,
         ))
@@ -153,12 +210,15 @@ def main(argv: list[str] | None = None) -> int:
     replacement = compact_response_to_hermes_messages(
         response,
         messages,
-        recent_tail_messages=args.recent_tail_messages,
+        recent_tail_messages=recent_tail_messages,
     )
+    replacement_text = "\n".join(str(message.get("content", "")) for message in replacement)
     print(json.dumps({
         "fixture": args.fixture or None,
+        "variant": args.variant,
         "message_summary": summarize_messages(messages),
         "replacement": replacement,
+        "handoff_quality": evaluate_handoff_quality(replacement_text),
     }, ensure_ascii=False, indent=2))
     return 0
 
