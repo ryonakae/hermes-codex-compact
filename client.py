@@ -147,8 +147,19 @@ class CompactClient:
         token = creds["api_key"]
         base_url = (creds.get("base_url") or "https://chatgpt.com/backend-api/codex").rstrip("/")
         headers = build_codex_headers(token, self._codex_header_builder)
+        headers.update(self._codex_identity_headers())
         endpoint = "responses/compact" if compact else "responses"
         return f"{base_url}/{endpoint}", headers
+
+    def _codex_identity_headers(self) -> Dict[str, str]:
+        headers: Dict[str, str] = {}
+        if self.config.codex_session_id:
+            headers["session_id"] = self.config.codex_session_id
+        if self.config.codex_window_id:
+            headers["x-codex-window-id"] = self.config.codex_window_id
+        if self.config.codex_installation_id:
+            headers["x-codex-installation-id"] = self.config.codex_installation_id
+        return headers
 
     def _auto_request(self, *, compact: bool = True) -> tuple[str, Dict[str, str]]:
         if self.config.openai_api_key or os.environ.get("OPENAI_API_KEY"):

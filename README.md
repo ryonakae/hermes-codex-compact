@@ -45,6 +45,9 @@ codex_compact:
   verbosity: null
   base_instructions: ""
   base_instructions_file: ""
+  codex_session_id: ""        # optional, parity smoke only
+  codex_window_id: ""         # optional, parity smoke only
+  codex_installation_id: ""   # optional, parity smoke only
   request_timeout_seconds: 120
   debug_dump: false
 ```
@@ -64,6 +67,7 @@ Codex OAuth is experimental. The plugin uses Hermes credential resolver helpers 
 - `parallel_tool_calls`, `reasoning_effort`, `reasoning_summary`, and `verbosity` are passed through to the compact payload when configured.
 - `missing_tool_output_policy: aborted` mirrors Codex-style interrupted tool calls by synthesizing a `function_call_output` with `output: "aborted"` instead of dropping the call.
 - `preprocessing_mode: codex_parity` avoids pre-truncating large tool outputs while the request remains under the configured budget; `safe_truncate` keeps the earlier conservative truncation behavior.
+- `codex_session_id`, `codex_window_id`, and `codex_installation_id` add Codex-like identity headers for `codex_oauth` parity smoke only. They are not API secrets, but they can correlate sessions, so do not log or commit real values in public artifacts.
 
 ## Development
 
