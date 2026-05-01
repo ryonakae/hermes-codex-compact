@@ -75,7 +75,7 @@ Run tests from the repo root:
 
 ```bash
 python -m pytest -q
-python -m py_compile __init__.py auth.py client.py config.py conversion.py engine.py message_ops.py responses_conversion.py compact_preprocess.py compact_postprocess.py session_fixtures.py scripts/export_session_fixture.py scripts/smoke_compact.py scripts/compare_builtin_fixture.py tests/*.py
+python -m py_compile __init__.py auth.py client.py config.py conversion.py engine.py message_ops.py responses_conversion.py compact_preprocess.py compact_postprocess.py session_fixtures.py codex_native_fixture.py hermes_plaintext_fixture.py scripts/export_session_fixture.py scripts/smoke_compact.py scripts/compare_builtin_fixture.py scripts/convert_hermes_jsonl_to_codex_fixture.py tests/*.py
 ```
 
 Dry-run the smoke payload without network access:
@@ -128,6 +128,41 @@ python scripts/smoke_compact.py \
 
 The fixture must be JSON with a `request` object containing the compact payload body. Optional `metadata.session_id`, `metadata.window_id`, and `metadata.installation_id` become `session_id`, `x-codex-window-id`, and `x-codex-installation-id` headers. Put real fixtures only under `tests/fixtures/private/`, never commit raw native fixtures or response outputs, and do not use this replay mode to create Hermes replacement history; it is a parity smoke tool.
 
+### Hermes JSONL Plaintext Compact Compatibility
+
+Hermes JSONL exports can be converted into a plaintext-only compact fixture for `/responses/compact` compatibility testing. This is intentionally **not** Codex-native parity: it does not reconstruct `reasoning.encrypted_content` or opaque `type: compaction` checkpoint state, and the converter rejects those fields instead of fabricating them.
+
+Convert an ignored/private Hermes session export:
+
+```bash
+python scripts/convert_hermes_jsonl_to_codex_fixture.py \
+  --input tests/fixtures/private/<session>.jsonl \
+  --output tests/fixtures/private/hermes-plaintext-real.compact.json \
+  --model gpt-5.5 \
+  --focus-topic 'Hermes ContextEngine plugin real-session compression test' \
+  --max-tool-output-chars 4000 \
+  --recent-tail-messages 12
+```
+
+Dry-run the converted fixture without printing raw messages or tool output:
+
+```bash
+python scripts/smoke_compact.py \
+  --hermes-plaintext-fixture tests/fixtures/private/hermes-plaintext-real.compact.json \
+  --dry-run
+```
+
+Execute the compatibility smoke only when you intend to use Codex OAuth/API credentials:
+
+```bash
+python scripts/smoke_compact.py \
+  --auth-mode codex_oauth \
+  --hermes-plaintext-fixture tests/fixtures/private/hermes-plaintext-real.compact.json \
+  --execute
+```
+
+Passing this smoke means the endpoint accepts Hermes-derived plaintext history; it does not prove runtime compression quality. Failing it also does not prove Codex compact is bad, because the official Codex path may depend on native encrypted rollout state unavailable in Hermes JSONL.
+
 Actually call the remote API only when you intend to spend tokens / use OAuth credentials:
 
 ```bash
@@ -177,7 +212,46 @@ preprocessing-parity-remote     2                     1,235              false
 instructed-tools-local-style    1                     12,428             false
 ```
 
-Updated takeaway: adding instructions and tool schemas did not materially change `/responses/compact` output for this lossy Hermes fixture. The local-style prompt path produced a much larger summary with completed work, remaining work, relevant files, and commit references, so the next quality work should inspect that output manually and tune the handoff quality heuristic before considering runtime use.
+Updated takeaway: adding instructions and tool schemas did not materially change `/responses/compact` output for this lossy Hermes fixture. The local-style prompt path produced a much larger summary with completed work, remaining work, relevant files, and commit references, but local-style quality tuning is intentionally out of the current remote/plaintext compatibility scope.
+
+### 2026-05-01 private Hermes JSONL plaintext compact smoke
+
+Ignored private source fixture:
+
+```text
+tests/fixtures/private/context-compression-real.jsonl
+```
+
+Converted ignored plaintext fixture:
+
+```text
+tests/fixtures/private/hermes-plaintext-real.compact.json
+```
+
+Safe dry-run metrics:
+
+```text
+input_items=113
+message=5
+function_call=54
+function_call_output=54
+visible_chars=132,072
+instruction_chars=678
+tools=7
+forbidden_encrypted_fields=0
+```
+
+Codex OAuth `/responses/compact` accepted the Hermes-derived plaintext fixture with `gpt-5.5`. The safe response summary was:
+
+```text
+response_keys=created_at,id,object,output,usage
+output_items=3
+output_item_types=message:2,compaction_summary:1
+has_opaque_compaction=false
+replacement_messages=2
+```
+
+Takeaway: plaintext compatibility is viable for this real Hermes session export. This still is not Codex-native parity and does not prove runtime quality; the request lacks Codex native encrypted reasoning/checkpoint state and needs a separate quality evaluation before any `context.engine` adoption.
 
 Private real-session fixture tests are opt-in:
 

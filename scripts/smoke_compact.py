@@ -25,6 +25,7 @@ from codex_native_fixture import load_codex_native_fixture  # noqa: E402
 from compact_postprocess import compact_response_to_hermes_messages  # noqa: E402
 from compact_preprocess import build_codex_compact_payload, estimate_response_item_visible_chars, response_item_type_counts  # noqa: E402
 from config import CodexCompactConfig  # noqa: E402
+from hermes_plaintext_fixture import load_hermes_plaintext_fixture, safe_metrics  # noqa: E402
 from local_style_compact import build_local_style_payload  # noqa: E402
 from message_ops import build_replacement_history  # noqa: E402
 from session_fixtures import load_session_messages, summarize_messages  # noqa: E402
@@ -163,6 +164,14 @@ def build_payload_from_codex_native_fixture(path: Path | str) -> Tuple[Dict[str,
     return payload, stats, fixture.identity_headers
 
 
+def build_payload_from_hermes_plaintext_fixture(path: Path | str) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, str]]:
+    fixture = load_hermes_plaintext_fixture(path)
+    payload = fixture.payload
+    stats = safe_metrics(payload)
+    stats["hermes_plaintext_fixture"] = True
+    return payload, stats, fixture.identity_headers
+
+
 def config_with_identity_headers(config: CodexCompactConfig, headers: dict[str, str]) -> CodexCompactConfig:
     return replace(
         config,
@@ -257,6 +266,32 @@ def codex_native_dry_run_summary(
     }
 
 
+def hermes_plaintext_dry_run_summary(
+    payload: Dict[str, Any],
+    stats: Dict[str, Any],
+    identity_headers: Dict[str, str],
+    *,
+    fixture: str | Path,
+) -> Dict[str, Any]:
+    return {
+        "dry_run": True,
+        "hermes_plaintext_fixture": True,
+        "fixture": str(fixture),
+        "payload_summary": {
+            "model": payload.get("model"),
+            "input_items": stats.get("input_items", 0),
+            "response_item_types": stats.get("response_item_types", {}),
+            "visible_chars": stats.get("visible_chars", 0),
+            "instruction_chars": stats.get("instruction_chars", 0),
+            "tools": stats.get("tools", 0),
+            "parallel_tool_calls": bool(payload.get("parallel_tool_calls")),
+            "forbidden_encrypted_fields": stats.get("forbidden_encrypted_fields", 0),
+        },
+        "identity_header_names": sorted(identity_headers),
+        "note": "Hermes plaintext fixture dry-run omits raw messages, raw tool output, and payload JSON.",
+    }
+
+
 def compact_response_safe_summary(response: Dict[str, Any]) -> Dict[str, Any]:
     output = response.get("output") if isinstance(response, dict) else None
     items = output if isinstance(output, list) else []
@@ -278,6 +313,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--focus-topic", default="")
     parser.add_argument("--fixture", default="", help="Optional JSONL fixture exported from a Hermes session")
     parser.add_argument("--codex-native-fixture", default="", help="Ignored/private Codex-native compact fixture JSON to replay directly")
+    parser.add_argument("--hermes-plaintext-fixture", default="", help="Ignored/private Hermes JSONL-derived plaintext compact fixture JSON to replay directly")
     parser.add_argument("--variant", choices=sorted(VARIANTS), default="current", help="Payload/preprocessing parity variant for A/B smoke")
     parser.add_argument("--compact-path", choices=["remote", "local-style"], default="remote", help="Use /responses/compact payload or normal Responses local-style checkpoint prompt")
     parser.add_argument("--recent-tail-messages", type=int, default=None)
@@ -288,15 +324,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="Explicit no-op flag; dry-run is the default unless --execute is set")
     args = parser.parse_args(argv)
 
+    direct_fixtures = [bool(args.fixture), bool(args.codex_native_fixture), bool(args.hermes_plaintext_fixture)]
+    if sum(direct_fixtures) > 1:
+        parser.error("--fixture, --codex-native-fixture, and --hermes-plaintext-fixture are mutually exclusive")
+
     if args.codex_native_fixture:
-        if args.fixture:
-            parser.error("--codex-native-fixture cannot be combined with --fixture")
         if args.compact_path != "remote":
             parser.error("--codex-native-fixture only supports --compact-path remote")
         if args.focus_topic:
             parser.error("--codex-native-fixture does not apply --focus-topic")
         payload, native_stats, identity_headers = build_payload_from_codex_native_fixture(args.codex_native_fixture)
         messages: List[Dict[str, Any]] = []
+    elif args.hermes_plaintext_fixture:
+        if args.compact_path != "remote":
+            parser.error("--hermes-plaintext-fixture only supports --compact-path remote")
+        if args.focus_topic:
+            parser.error("--hermes-plaintext-fixture already contains instructions; do not combine with --focus-topic")
+        payload, plaintext_stats, identity_headers = build_payload_from_hermes_plaintext_fixture(args.hermes_plaintext_fixture)
+        messages = []
     elif args.fixture:
         payload, messages = build_payload_from_fixture(
             args.fixture,
@@ -324,6 +369,14 @@ def main(argv: list[str] | None = None) -> int:
         ))
         return 0
 
+    if not args.execute and args.hermes_plaintext_fixture:
+        print(json.dumps(
+            hermes_plaintext_dry_run_summary(payload, plaintext_stats, identity_headers, fixture=args.hermes_plaintext_fixture),
+            ensure_ascii=False,
+            indent=2,
+        ))
+        return 0
+
     if not args.execute:
         print(json.dumps(
             dry_run_summary(payload, messages, fixture=args.fixture or None, compare_builtin=args.compare_builtin, variant=f"{args.variant}:{args.compact_path}"),
@@ -333,7 +386,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     config = CodexCompactConfig(auth_mode=args.auth_mode, model=args.model)
-    if args.codex_native_fixture:
+    if args.codex_native_fixture or args.hermes_plaintext_fixture:
         config = config_with_identity_headers(config, identity_headers)
     client = CompactClient(config)
     if args.codex_native_fixture:
@@ -342,6 +395,16 @@ def main(argv: list[str] | None = None) -> int:
             "fixture": args.codex_native_fixture,
             "codex_native_fixture": True,
             "response_summary": compact_response_safe_summary(response),
+        }, ensure_ascii=False, indent=2))
+        return 0
+    if args.hermes_plaintext_fixture:
+        response = client.compact(payload)
+        replacement = compact_response_to_hermes_messages(response, [], recent_tail_messages=0)
+        print(json.dumps({
+            "fixture": args.hermes_plaintext_fixture,
+            "hermes_plaintext_fixture": True,
+            "response_summary": compact_response_safe_summary(response),
+            "replacement_messages": len(replacement),
         }, ensure_ascii=False, indent=2))
         return 0
 

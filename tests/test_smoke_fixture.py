@@ -2,13 +2,17 @@ from pathlib import Path
 
 from codex_native_fixture import load_codex_native_fixture
 from config import CodexCompactConfig
+from compact_postprocess import OpaqueRemoteCompactionError
 from session_fixtures import load_session_messages
 from scripts.smoke_compact import (
     build_payload_from_codex_native_fixture,
     build_payload_from_fixture,
+    build_payload_from_hermes_plaintext_fixture,
     config_with_identity_headers,
     dry_run_summary,
     evaluate_handoff_quality,
+    hermes_plaintext_dry_run_summary,
+    main,
     variant_overrides,
 )
 
@@ -179,3 +183,87 @@ def test_config_with_identity_headers_does_not_mutate_original_config():
     assert base.codex_session_id == ""
     assert updated.codex_session_id == fixture.identity_headers["session_id"]
     assert updated.codex_window_id == fixture.identity_headers["x-codex-window-id"]
+
+
+def test_hermes_plaintext_fixture_dry_run_reports_safe_metrics_only():
+    fixture = Path("tests/fixtures/hermes_plaintext_minimal.json")
+
+    payload, metrics, identity_headers = build_payload_from_hermes_plaintext_fixture(fixture)
+    summary = hermes_plaintext_dry_run_summary(payload, metrics, identity_headers, fixture=fixture)
+
+    assert summary["hermes_plaintext_fixture"] is True
+    assert summary["payload_summary"]["input_items"] == len(payload["input"])
+    assert summary["payload_summary"]["forbidden_encrypted_fields"] == 0
+    rendered = str(summary)
+    assert "private user request" not in rendered
+    assert "private tool output" not in rendered
+    assert summary["identity_header_names"] == ["session_id"]
+
+
+def test_plaintext_and_codex_native_fixtures_are_mutually_exclusive():
+    code_args = [
+        "--codex-native-fixture",
+        "tests/fixtures/codex_native_minimal.json",
+        "--hermes-plaintext-fixture",
+        "tests/fixtures/hermes_plaintext_minimal.json",
+    ]
+
+    try:
+        main(code_args)
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:
+        raise AssertionError("expected parser error")
+
+
+def test_hermes_plaintext_execute_passes_payload_to_client(monkeypatch, capsys):
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, config):
+            captured["config"] = config
+
+        def compact(self, payload):
+            captured["payload"] = payload
+            return {"output_text": "compact summary"}
+
+    monkeypatch.setattr("scripts.smoke_compact.CompactClient", FakeClient)
+
+    code = main([
+        "--auth-mode",
+        "codex_oauth",
+        "--hermes-plaintext-fixture",
+        "tests/fixtures/hermes_plaintext_minimal.json",
+        "--execute",
+    ])
+
+    assert code == 0
+    assert captured["payload"]["model"] == "gpt-test"
+    assert captured["config"].codex_session_id == "sess_plaintext"
+    printed = capsys.readouterr().out
+    assert "compact summary" not in printed
+    assert "response_summary" in printed
+
+
+def test_hermes_plaintext_execute_fails_closed_on_opaque_compaction(monkeypatch):
+    class FakeClient:
+        def __init__(self, config):
+            pass
+
+        def compact(self, payload):
+            return {"output": [{"type": "compaction", "encrypted_content": "ENCRYPTED"}]}
+
+    monkeypatch.setattr("scripts.smoke_compact.CompactClient", FakeClient)
+
+    try:
+        main([
+            "--auth-mode",
+            "codex_oauth",
+            "--hermes-plaintext-fixture",
+            "tests/fixtures/hermes_plaintext_minimal.json",
+            "--execute",
+        ])
+    except OpaqueRemoteCompactionError:
+        pass
+    else:
+        raise AssertionError("expected OpaqueRemoteCompactionError")

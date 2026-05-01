@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "source": "hermes-jsonl-plaintext",
+    "model": "gpt-test",
+    "session_id": "sess_plaintext",
+    "encrypted_content": false
+  },
+  "request": {
+    "model": "gpt-test",
+    "instructions": "Compact this plaintext Hermes session fixture.",
+    "input": [
+      {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "private user request"}]},
+      {"type": "function_call", "call_id": "call_plain", "name": "terminal", "arguments": "{\"command\": \"pytest -q\"}"},
+      {"type": "function_call_output", "call_id": "call_plain", "output": "private tool output"},
+      {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "implemented"}]}
+    ],
+    "tools": [],
+    "parallel_tool_calls": true,
+    "reasoning": {"effort": "medium", "summary": "auto"},
+    "text": null
+  }
+}
