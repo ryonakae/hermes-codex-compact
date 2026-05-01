@@ -157,6 +157,49 @@ Then it wraps the assistant summary with `summary_prefix.md` and builds replacem
 
 Decision: the user-facing impression that “Codex compact is smart” may come from either the remote endpoint with native Codex history, the local-style prompt path, or the combination. We need to test them separately.
 
+### 2026-05-01 official implementation re-check
+
+Source checkout:
+
+```text
+/tmp/openai-codex-sparse
+openai/codex main f50c02d7bcd4c06a23173389da8ed2c68c03d81d
+```
+
+Relevant files:
+
+```text
+codex-rs/core/src/client.rs
+codex-rs/core/src/compact.rs
+codex-rs/core/src/compact_remote.rs
+codex-rs/core/src/tasks/compact.rs
+codex-rs/protocol/src/models.rs
+codex-rs/codex-api/src/endpoint/compact.rs
+codex-rs/codex-api/src/requests/headers.rs
+codex-rs/tools/src/tool_spec.rs
+codex-rs/models-manager/models.json
+```
+
+Updated findings:
+
+- Official remote compaction calls `/responses/compact`, but it is not treated like a plaintext summary endpoint. Tests model the successful response as `ResponseItem::Compaction { encrypted_content }`, with serde alias `compaction_summary`.
+- The compacted item is later mounted back into the conversation history as a native Codex `ResponseItem`, not converted into a visible user/assistant summary message.
+- Official regular `/responses` calls request `include = ["reasoning.encrypted_content"]` when reasoning is enabled, and history can therefore contain encrypted reasoning items. Our Hermes JSONL fixture is already lossy: it has no native encrypted reasoning items and no native compaction items.
+- Official remote compact payload is built from `Prompt`, not raw chat messages: `prompt.get_formatted_input()`, `prompt.base_instructions.text`, `prompt.tools`, model-specific reasoning/text settings, and Codex session identity headers.
+- Official remote compact sends `x-codex-installation-id`, `x-codex-window-id`, and `session_id`. Our plugin currently sends Codex auth/Cloudflare headers but not these session/window identity headers.
+- Official tools are serialized directly from Codex `ToolSpec`. Our `instructed-tools-remote` variant only injects a minimal approximation inferred from fixture tool names, not the active Codex/Hermes model-visible tool registry.
+- For normal `/responses`, Codex uses `store = provider.is_azure_responses_endpoint()`, `stream = true`, `tool_choice = "auto"`, `prompt_cache_key = conversation_id`, `client_metadata[x-codex-installation-id]`, and `include` for encrypted reasoning. The local-style smoke only approximates part of this.
+
+Revised judgment:
+
+`/responses/compact` should no longer be judged as “bad endpoint quality” from the current smoke. The smoke is not equivalent to Codex runtime because it lacks native encrypted reasoning/compaction history, exact `ToolSpec` schemas, and Codex session/window identity. The remote path may be designed to produce an opaque encrypted checkpoint for Codex’s own next-turn context rather than a readable Hermes handoff summary.
+
+Implication for Hermes:
+
+- If Hermes needs a visible replacement history, local-style explicit summary remains the practical path.
+- If we want to test remote compact fairly, the next experiment should be a Codex-native fixture: capture/export actual Codex `ResponseItem` history including `reasoning.encrypted_content` and any `compaction` items, then replay that payload shape with Codex identity/session headers.
+- Without native Codex encrypted items, repeatedly tweaking prompt text/tool names around a Hermes JSONL fixture is unlikely to prove remote compact parity.
+
 ---
 
 ## Non-goals
@@ -864,4 +907,13 @@ Before any remote API smoke:
 
 ## Current recommended next action
 
-Phase 1〜5 の implementation/smoke は完了。次は Phase 6 の判断として、ignored private output の `instructed-tools-local-style` を raw commit せず手元で読み、handoff quality heuristic が実態を過小評価していないか確認する。現時点の判断は Option B 寄り: `/responses/compact` はこの lossy Hermes fixture では selected-item replacement のまま、local-style compact は明らかに handoff summary に近い。
+Phase 1〜5 の implementation/smoke は完了。2026-05-01 の公式実装再確認により、次の優先は Phase 6 の前に remote compact parity の前提を分け直すこと。
+
+Recommended order:
+
+- First, treat `/responses/compact` as a Codex-native opaque checkpoint path, not as a readable summary endpoint.
+- Add a small parity test/documentation task for `ResponseItem::Compaction { encrypted_content }` handling so our postprocess does not pretend it can extract plaintext from remote compact output.
+- If remote parity is still worth testing, capture a Codex-native fixture with raw `ResponseItem` history, including `reasoning.encrypted_content` and any existing `compaction` items, plus session/window header shape. Do not use the lossy Hermes JSONL fixture for that conclusion.
+- In parallel, continue manual review of ignored private `instructed-tools-local-style` output as the practical Hermes visible-handoff path.
+
+Current judgment: local-style remains the practical Hermes path for visible resumable handoff. Remote `/responses/compact` may still be correct inside Codex, but current Hermes fixture cannot fairly evaluate it because it lacks native encrypted Codex state.
