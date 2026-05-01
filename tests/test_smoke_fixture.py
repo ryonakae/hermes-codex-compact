@@ -1,8 +1,12 @@
 from pathlib import Path
 
+from codex_native_fixture import load_codex_native_fixture
+from config import CodexCompactConfig
 from session_fixtures import load_session_messages
 from scripts.smoke_compact import (
+    build_payload_from_codex_native_fixture,
     build_payload_from_fixture,
+    config_with_identity_headers,
     dry_run_summary,
     evaluate_handoff_quality,
     variant_overrides,
@@ -151,3 +155,27 @@ def test_handoff_quality_detects_raw_tool_dump():
     metrics = evaluate_handoff_quality("skill_view output " + "x" * 10000)
     assert metrics["raw_tool_dump_detected"] is True
     assert metrics["skill_view_dump_detected"] is True
+
+
+def test_build_payload_from_codex_native_fixture_preserves_native_items():
+    fixture = Path("tests/fixtures/codex_native_minimal.json")
+
+    payload, stats, identity_headers = build_payload_from_codex_native_fixture(fixture)
+
+    assert payload["model"] == "gpt-5.5"
+    assert any(item["type"] == "reasoning" for item in payload["input"])
+    assert any(item["type"] == "compaction" for item in payload["input"])
+    assert stats["input_items"] == len(payload["input"])
+    assert stats["codex_native_fixture"] is True
+    assert identity_headers["session_id"]
+
+
+def test_config_with_identity_headers_does_not_mutate_original_config():
+    base = CodexCompactConfig(auth_mode="codex_oauth")
+    fixture = load_codex_native_fixture(Path("tests/fixtures/codex_native_minimal.json"))
+
+    updated = config_with_identity_headers(base, fixture.identity_headers)
+
+    assert base.codex_session_id == ""
+    assert updated.codex_session_id == fixture.identity_headers["session_id"]
+    assert updated.codex_window_id == fixture.identity_headers["x-codex-window-id"]

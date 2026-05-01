@@ -118,6 +118,16 @@ python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.js
 
 Codex `/responses/compact` may return `type: compaction` with only `encrypted_content`. The plugin treats this as an opaque Codex-native checkpoint and fails closed instead of converting it into a fake readable Hermes summary. Use the Codex-native fixture/replay smoke path to evaluate this mode.
 
+Codex-native fixture replay sends a prebuilt compact payload directly to `/responses/compact` and adds optional identity headers from fixture metadata:
+
+```bash
+python scripts/smoke_compact.py \
+  --codex-native-fixture tests/fixtures/private/codex-native-real.json \
+  --execute
+```
+
+The fixture must be JSON with a `request` object containing the compact payload body. Optional `metadata.session_id`, `metadata.window_id`, and `metadata.installation_id` become `session_id`, `x-codex-window-id`, and `x-codex-installation-id` headers. Put real fixtures only under `tests/fixtures/private/`, never commit raw native fixtures or response outputs, and do not use this replay mode to create Hermes replacement history; it is a parity smoke tool.
+
 Actually call the remote API only when you intend to spend tokens / use OAuth credentials:
 
 ```bash

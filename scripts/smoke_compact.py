@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -20,8 +21,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from client import CompactClient  # noqa: E402
+from codex_native_fixture import load_codex_native_fixture  # noqa: E402
 from compact_postprocess import compact_response_to_hermes_messages  # noqa: E402
-from compact_preprocess import build_codex_compact_payload, response_item_type_counts  # noqa: E402
+from compact_preprocess import build_codex_compact_payload, estimate_response_item_visible_chars, response_item_type_counts  # noqa: E402
 from config import CodexCompactConfig  # noqa: E402
 from local_style_compact import build_local_style_payload  # noqa: E402
 from message_ops import build_replacement_history  # noqa: E402
@@ -144,6 +146,32 @@ def build_payload_from_fixture(
     return payload, messages
 
 
+def build_payload_from_codex_native_fixture(path: Path | str) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, str]]:
+    fixture = load_codex_native_fixture(path)
+    payload = fixture.payload
+    items = payload.get("input") if isinstance(payload.get("input"), list) else []
+    stats = {
+        "input_items": len(items),
+        "response_item_types": response_item_type_counts(items),
+        "visible_chars": sum(
+            estimate_response_item_visible_chars(item) for item in items if isinstance(item, dict)
+        ),
+        "instruction_chars": len(str(payload.get("instructions") or "")),
+        "tools": len(payload.get("tools") or []),
+        "codex_native_fixture": True,
+    }
+    return payload, stats, fixture.identity_headers
+
+
+def config_with_identity_headers(config: CodexCompactConfig, headers: dict[str, str]) -> CodexCompactConfig:
+    return replace(
+        config,
+        codex_session_id=headers.get("session_id", ""),
+        codex_window_id=headers.get("x-codex-window-id", ""),
+        codex_installation_id=headers.get("x-codex-installation-id", ""),
+    )
+
+
 def _preview_replacement(messages: List[Dict[str, Any]], recent_tail_messages: int = 2) -> List[Dict[str, Any]]:
     return build_replacement_history(
         messages,
@@ -204,12 +232,52 @@ def dry_run_summary(
     return result
 
 
+def codex_native_dry_run_summary(
+    payload: Dict[str, Any],
+    stats: Dict[str, Any],
+    identity_headers: Dict[str, str],
+    *,
+    fixture: str | Path,
+) -> Dict[str, Any]:
+    return {
+        "dry_run": True,
+        "codex_native_fixture": True,
+        "fixture": str(fixture),
+        "payload_summary": {
+            "model": payload.get("model"),
+            "input_items": stats.get("input_items", 0),
+            "response_item_types": stats.get("response_item_types", {}),
+            "visible_chars": stats.get("visible_chars", 0),
+            "instruction_chars": stats.get("instruction_chars", 0),
+            "tools": stats.get("tools", 0),
+            "parallel_tool_calls": bool(payload.get("parallel_tool_calls")),
+        },
+        "identity_header_names": sorted(identity_headers),
+        "note": "Native fixture dry-run omits raw input items and encrypted_content values.",
+    }
+
+
+def compact_response_safe_summary(response: Dict[str, Any]) -> Dict[str, Any]:
+    output = response.get("output") if isinstance(response, dict) else None
+    items = output if isinstance(output, list) else []
+    return {
+        "response_keys": sorted(response.keys()) if isinstance(response, dict) else [],
+        "output_items": len(items),
+        "output_item_types": response_item_type_counts([item for item in items if isinstance(item, dict)]),
+        "has_opaque_compaction": any(
+            isinstance(item, dict) and item.get("type") == "compaction" and bool(item.get("encrypted_content"))
+            for item in items
+        ),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--auth-mode", choices=["api_key", "codex_oauth", "auto"], default="api_key")
     parser.add_argument("--model", default="gpt-5.1-codex")
     parser.add_argument("--focus-topic", default="")
     parser.add_argument("--fixture", default="", help="Optional JSONL fixture exported from a Hermes session")
+    parser.add_argument("--codex-native-fixture", default="", help="Ignored/private Codex-native compact fixture JSON to replay directly")
     parser.add_argument("--variant", choices=sorted(VARIANTS), default="current", help="Payload/preprocessing parity variant for A/B smoke")
     parser.add_argument("--compact-path", choices=["remote", "local-style"], default="remote", help="Use /responses/compact payload or normal Responses local-style checkpoint prompt")
     parser.add_argument("--recent-tail-messages", type=int, default=None)
@@ -217,9 +285,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-input-item-chars", type=int, default=0)
     parser.add_argument("--compare-builtin", action="store_true", help="Report built-in compressor comparability without changing runtime config")
     parser.add_argument("--execute", action="store_true", help="Actually call the remote compact endpoint")
+    parser.add_argument("--dry-run", action="store_true", help="Explicit no-op flag; dry-run is the default unless --execute is set")
     args = parser.parse_args(argv)
 
-    if args.fixture:
+    if args.codex_native_fixture:
+        if args.fixture:
+            parser.error("--codex-native-fixture cannot be combined with --fixture")
+        if args.compact_path != "remote":
+            parser.error("--codex-native-fixture only supports --compact-path remote")
+        if args.focus_topic:
+            parser.error("--codex-native-fixture does not apply --focus-topic")
+        payload, native_stats, identity_headers = build_payload_from_codex_native_fixture(args.codex_native_fixture)
+        messages: List[Dict[str, Any]] = []
+    elif args.fixture:
         payload, messages = build_payload_from_fixture(
             args.fixture,
             model=args.model,
@@ -238,6 +316,14 @@ def main(argv: list[str] | None = None) -> int:
     if recent_tail_messages is None:
         recent_tail_messages = int(overrides.get("recent_tail_messages", 2))
 
+    if not args.execute and args.codex_native_fixture:
+        print(json.dumps(
+            codex_native_dry_run_summary(payload, native_stats, identity_headers, fixture=args.codex_native_fixture),
+            ensure_ascii=False,
+            indent=2,
+        ))
+        return 0
+
     if not args.execute:
         print(json.dumps(
             dry_run_summary(payload, messages, fixture=args.fixture or None, compare_builtin=args.compare_builtin, variant=f"{args.variant}:{args.compact_path}"),
@@ -247,7 +333,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     config = CodexCompactConfig(auth_mode=args.auth_mode, model=args.model)
+    if args.codex_native_fixture:
+        config = config_with_identity_headers(config, identity_headers)
     client = CompactClient(config)
+    if args.codex_native_fixture:
+        response = client.compact(payload)
+        print(json.dumps({
+            "fixture": args.codex_native_fixture,
+            "codex_native_fixture": True,
+            "response_summary": compact_response_safe_summary(response),
+        }, ensure_ascii=False, indent=2))
+        return 0
+
     if args.compact_path == "local-style":
         response = client.responses(payload)
         output_text = response.get("output_text") or ""
