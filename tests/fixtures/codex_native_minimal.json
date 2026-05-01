@@ -1,0 +1,24 @@
+{
+  "metadata": {
+    "source": "synthetic-codex-native",
+    "model": "gpt-5.5",
+    "session_id": "00000000-0000-4000-8000-000000000001",
+    "window_id": "00000000-0000-4000-8000-000000000001:0",
+    "installation_id": "00000000-0000-4000-8000-000000000002"
+  },
+  "request": {
+    "model": "gpt-5.5",
+    "instructions": "You are Codex, a coding agent based on GPT-5.",
+    "input": [
+      {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Implement feature X"}]},
+      {"type": "reasoning", "summary": [], "encrypted_content": "ENCRYPTED_REASONING_SYNTHETIC"},
+      {"type": "function_call", "name": "shell", "arguments": "{\"cmd\":\"pytest -q\"}", "call_id": "call_synthetic"},
+      {"type": "function_call_output", "call_id": "call_synthetic", "output": "3 passed"},
+      {"type": "compaction", "encrypted_content": "ENCRYPTED_PREVIOUS_COMPACTION_SYNTHETIC"}
+    ],
+    "tools": [],
+    "parallel_tool_calls": true,
+    "reasoning": {"effort": "medium", "summary": "auto"},
+    "text": null
+  }
+}
