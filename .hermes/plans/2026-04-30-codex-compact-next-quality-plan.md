@@ -914,6 +914,14 @@ Recommended order:
 - First, treat `/responses/compact` as a Codex-native opaque checkpoint path, not as a readable summary endpoint.
 - Add a small parity test/documentation task for `ResponseItem::Compaction { encrypted_content }` handling so our postprocess does not pretend it can extract plaintext from remote compact output.
 - If remote parity is still worth testing, capture a Codex-native fixture with raw `ResponseItem` history, including `reasoning.encrypted_content` and any existing `compaction` items, plus session/window header shape. Do not use the lossy Hermes JSONL fixture for that conclusion.
-- In parallel, continue manual review of ignored private `instructed-tools-local-style` output as the practical Hermes visible-handoff path.
+- Do not include local-style output review in this implementation slice.
 
-Current judgment: local-style remains the practical Hermes path for visible resumable handoff. Remote `/responses/compact` may still be correct inside Codex, but current Hermes fixture cannot fairly evaluate it because it lacks native encrypted Codex state.
+Current judgment: remote `/responses/compact` may still be correct inside Codex, but current Hermes fixture cannot fairly evaluate it because it lacks native encrypted Codex state. Local-style review is intentionally not part of the next implementation slice.
+
+Next implementation plan:
+
+```text
+.hermes/plans/2026-05-01-codex-remote-native-parity.md
+```
+
+This plan implements only items 1〜4: opaque remote compaction semantics, encrypted compaction handling, Codex-native fixture replay, and Codex session/window identity headers. It explicitly excludes local-style quality review.
