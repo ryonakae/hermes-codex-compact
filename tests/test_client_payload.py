@@ -6,10 +6,20 @@ from client import CompactClient, CompactHTTPError, redact_secret
 
 
 def test_redact_secret_removes_bearer_tokens():
-    text = "Authorization: Bearer secret-token-123"
+    token = "secret-token-123"
+    text = f"Authorization: Bearer {token}"
 
-    assert "secret-token" not in redact_secret(text)
+    assert token not in redact_secret(text)
     assert "Bearer [REDACTED]" in redact_secret(text)
+
+
+def test_redact_secret_removes_encrypted_content_error_fragments():
+    text = "The encrypted content ENCR...ETIC could not be verified"
+
+    redacted = redact_secret(text)
+
+    assert "ENCR...ETIC" not in redacted
+    assert "encrypted content [REDACTED]" in redacted
 
 
 def test_api_key_request_uses_openai_endpoint_and_headers(monkeypatch):

@@ -16,12 +16,13 @@ except ImportError:  # pragma: no cover - local test fallback
     from auth import build_codex_headers, resolve_codex_credentials
     from config import CodexCompactConfig
 
-_AUTH_RE = re.compile(r"Bearer\s+[^\s,;\n]+", re.IGNORECASE)
+_AUTH_RE = re.compile(r"Bearer\s+\S+", re.IGNORECASE)
+_ENCRYPTED_CONTENT_RE = re.compile(r"encrypted content\s+\S+", re.IGNORECASE)
 
 
 def redact_secret(text: str) -> str:
-    return _AUTH_RE.sub("Bearer [REDACTED]", str(text))
-
+    redacted = _AUTH_RE.sub("Bearer [REDACTED]", str(text))
+    return _ENCRYPTED_CONTENT_RE.sub("encrypted content [REDACTED]", redacted)
 
 class CompactHTTPError(RuntimeError):
     def __init__(self, status: int, body: str):
