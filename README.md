@@ -110,6 +110,10 @@ python scripts/smoke_compact.py --fixture tests/fixtures/private/<session-id>.js
 
 `--compact-path local-style` keeps the same fixture preprocessing but appends Codex's explicit checkpoint prompt and sends the payload through the normal Responses path when `--execute` is used. This lets us compare `/responses/compact` against the prompt-based compaction behavior people may associate with Codex.
 
+### Remote Compact Opaque Checkpoints
+
+Codex `/responses/compact` may return `type: compaction` with only `encrypted_content`. The plugin treats this as an opaque Codex-native checkpoint and fails closed instead of converting it into a fake readable Hermes summary. Use the Codex-native fixture/replay smoke path to evaluate this mode.
+
 Actually call the remote API only when you intend to spend tokens / use OAuth credentials:
 
 ```bash

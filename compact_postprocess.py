@@ -12,6 +12,20 @@ except ImportError:  # pragma: no cover - local test fallback
     from message_ops import build_replacement_history, sanitize_tail_tool_pairs
 
 
+class OpaqueRemoteCompactionError(RuntimeError):
+    """Raised when Codex remote compact returns only an opaque checkpoint."""
+
+
+def is_opaque_compaction_item(item: Dict[str, Any]) -> bool:
+    return (
+        isinstance(item, dict)
+        and item.get("type") == "compaction"
+        and isinstance(item.get("encrypted_content"), str)
+        and bool(item.get("encrypted_content"))
+        and not any(item.get(key) for key in ("summary", "content", "text"))
+    )
+
+
 def _content_parts_to_text(content: Any) -> str:
     texts: List[str] = []
     if isinstance(content, str):
@@ -51,7 +65,7 @@ def should_keep_compacted_response_item(item: Dict[str, Any]) -> bool:
             return False
         return role in {"user", "assistant"}
     if item_type == "compaction":
-        return True
+        return not is_opaque_compaction_item(item)
     return False
 
 
@@ -101,6 +115,14 @@ def compact_response_to_hermes_messages(
     recent_tail_messages: int = 0,
 ) -> List[Dict[str, Any]]:
     """Convert compact endpoint response into valid Hermes chat messages."""
+    output = response.get("output")
+    if isinstance(output, list) and any(is_opaque_compaction_item(item) for item in output):
+        raise OpaqueRemoteCompactionError(
+            "Codex remote compact returned an opaque Codex compaction checkpoint "
+            "(`encrypted_content`) rather than readable summary text. "
+            "Do not use this as Hermes replacement history without a Codex-native replay path."
+        )
+
     messages = _structured_output_messages(response)
     if not messages:
         compact_text = extract_compact_text(response)
