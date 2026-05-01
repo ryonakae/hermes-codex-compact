@@ -8,6 +8,7 @@ from scripts.smoke_compact import (
     build_payload_from_codex_native_fixture,
     build_payload_from_fixture,
     build_payload_from_hermes_plaintext_fixture,
+    compact_response_safe_summary,
     config_with_identity_headers,
     dry_run_summary,
     evaluate_handoff_quality,
@@ -172,6 +173,18 @@ def test_build_payload_from_codex_native_fixture_preserves_native_items():
     assert stats["input_items"] == len(payload["input"])
     assert stats["codex_native_fixture"] is True
     assert identity_headers["session_id"]
+
+
+def test_compact_response_safe_summary_detects_opaque_compaction():
+    response = {"output": [{"type": "compaction", "encrypted_content": "ENCRYPTED"}]}
+    summary = compact_response_safe_summary(response)
+    assert summary["has_opaque_compaction"] is True
+
+
+def test_compact_response_safe_summary_detects_opaque_compaction_summary():
+    response = {"output": [{"type": "compaction_summary", "encrypted_content": "ENCRYPTED"}]}
+    summary = compact_response_safe_summary(response)
+    assert summary["has_opaque_compaction"] is True
 
 
 def test_config_with_identity_headers_does_not_mutate_original_config():

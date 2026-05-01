@@ -83,6 +83,17 @@ def test_remote_compact_encrypted_only_response_fails_closed():
 
     assert "opaque Codex compaction checkpoint" in str(exc.value)
     assert "encrypted_content" in str(exc.value)
+
+
+def test_remote_compact_encrypted_only_compaction_summary_fails_closed():
+    response = {
+        "output": [
+            {"type": "compaction_summary", "encrypted_content": "ENCRYPTED_COMPACTION_SUMMARY"},
+        ]
+    }
+
+    with pytest.raises(OpaqueRemoteCompactionError) as exc:
+        compact_response_to_hermes_messages(response, original_messages=[])
     assert "ENCRYPTED_COMPACTION_SUMMARY" not in str(exc.value)
 
 

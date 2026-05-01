@@ -241,17 +241,17 @@ tools=7
 forbidden_encrypted_fields=0
 ```
 
-Codex OAuth `/responses/compact` accepted the Hermes-derived plaintext fixture with `gpt-5.5`. The safe response summary was:
+Codex OAuth `/responses/compact` accepted the Hermes-derived plaintext fixture with `gpt-5.5`, but returned an opaque encrypted `compaction_summary`. The safe response summary was:
 
 ```text
 response_keys=created_at,id,object,output,usage
 output_items=3
 output_item_types=message:2,compaction_summary:1
-has_opaque_compaction=false
-replacement_messages=2
+has_opaque_compaction=true
+postprocess=OpaqueRemoteCompactionError
 ```
 
-Takeaway: plaintext compatibility is viable for this real Hermes session export. This still is not Codex-native parity and does not prove runtime quality; the request lacks Codex native encrypted reasoning/checkpoint state and needs a separate quality evaluation before any `context.engine` adoption.
+Takeaway: plaintext request compatibility is viable for this real Hermes session export, but it still does not produce Hermes-readable replacement history. The two visible message items were early user messages, not a resumable checkpoint. This is not Codex-native parity and not runtime-quality compression; the response still depends on opaque encrypted Codex checkpoint state unavailable to Hermes.
 
 Private real-session fixture tests are opt-in:
 

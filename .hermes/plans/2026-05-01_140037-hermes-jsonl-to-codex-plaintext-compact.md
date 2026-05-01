@@ -29,7 +29,7 @@ Use explicit naming so future reports do not confuse the result with real Codex-
 
 ## Implementation Status
 
-Implementation status on 2026-05-01: completed. The plaintext fixture loader, JSONL converter, smoke replay support, README documentation, and private real-session compatibility smoke were implemented. The real plaintext fixture smoke used only safe metrics and showed `/responses/compact` accepted the converted Hermes history, returning `message:2` and `compaction_summary:1` output items with no opaque encrypted compaction; postprocess produced 2 replacement messages.
+Implementation status on 2026-05-01: completed. The plaintext fixture loader, JSONL converter, smoke replay support, README documentation, and private real-session compatibility smoke were implemented. The real plaintext fixture smoke used only safe metrics and showed `/responses/compact` accepted the converted Hermes history, but returned an opaque encrypted `compaction_summary`; postprocess now fail-closes with `OpaqueRemoteCompactionError`. The two visible message items were early user messages, not a resumable checkpoint.
 
 Relevant implementation files:
 

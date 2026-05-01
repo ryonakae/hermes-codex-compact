@@ -300,7 +300,9 @@ def compact_response_safe_summary(response: Dict[str, Any]) -> Dict[str, Any]:
         "output_items": len(items),
         "output_item_types": response_item_type_counts([item for item in items if isinstance(item, dict)]),
         "has_opaque_compaction": any(
-            isinstance(item, dict) and item.get("type") == "compaction" and bool(item.get("encrypted_content"))
+            isinstance(item, dict)
+            and item.get("type") in {"compaction", "compaction_summary"}
+            and bool(item.get("encrypted_content"))
             for item in items
         ),
     }

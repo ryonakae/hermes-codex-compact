@@ -19,7 +19,7 @@ class OpaqueRemoteCompactionError(RuntimeError):
 def is_opaque_compaction_item(item: Dict[str, Any]) -> bool:
     return (
         isinstance(item, dict)
-        and item.get("type") == "compaction"
+        and item.get("type") in {"compaction", "compaction_summary"}
         and isinstance(item.get("encrypted_content"), str)
         and bool(item.get("encrypted_content"))
         and not any(item.get(key) for key in ("summary", "content", "text"))
