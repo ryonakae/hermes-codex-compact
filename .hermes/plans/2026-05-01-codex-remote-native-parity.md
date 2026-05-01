@@ -766,6 +766,42 @@ ignored private/cache paths only
 
 ---
 
+## Implementation Status
+
+Implemented on 2026-05-01.
+
+Commits:
+
+```text
+02e1195 fix: fail closed on opaque codex compaction
+9b499f7 feat: add codex native compact fixtures
+f2890d2 feat: add codex compact identity headers
+092afe7 feat: replay codex native compact fixtures
+```
+
+Verification:
+
+```text
+python -m pytest -q
+93 passed, 1 skipped
+
+python -m py_compile __init__.py auth.py client.py config.py conversion.py engine.py message_ops.py responses_conversion.py compact_preprocess.py compact_postprocess.py session_fixtures.py codex_native_fixture.py scripts/export_session_fixture.py scripts/smoke_compact.py scripts/compare_builtin_fixture.py tests/*.py
+OK
+
+Plugin discovery:
+found= True
+enabled= True
+error= None
+```
+
+Notes:
+
+- `--dry-run` is now accepted explicitly even though dry-run remains the default without `--execute`.
+- Codex-native dry-run output reports only safe metrics and header names; it omits raw input items and encrypted values.
+- Execute mode for Codex-native fixtures returns a safe response summary, not Hermes replacement history.
+
+---
+
 ## Open Question For Execution
 
-How to obtain the first real Codex-native private fixture is intentionally not automated in this plan. The implementation should support an ignored JSON file with the documented shape. After that, a separate small investigation can decide the least invasive capture method from Codex CLI traces or debug output without touching credentials or committing raw session data.
+How to obtain the first real Codex-native private fixture is intentionally not automated in this plan. The implementation supports an ignored JSON file with the documented shape. After that, a separate small investigation can decide the least invasive capture method from Codex CLI traces or debug output without touching credentials or committing raw session data.

@@ -925,3 +925,15 @@ Next implementation plan:
 ```
 
 This plan implements only items 1〜4: opaque remote compaction semantics, encrypted compaction handling, Codex-native fixture replay, and Codex session/window identity headers. It explicitly excludes local-style quality review.
+
+Implementation status:
+
+```text
+completed 2026-05-01
+02e1195 fix: fail closed on opaque codex compaction
+9b499f7 feat: add codex native compact fixtures
+f2890d2 feat: add codex compact identity headers
+092afe7 feat: replay codex native compact fixtures
+```
+
+Remote compact is now treated as a Codex-native opaque checkpoint path. The plugin fails closed on encrypted-only `type: compaction` output instead of fabricating readable replacement history. Codex-native replay smoke is available through `--codex-native-fixture`; real fixtures must remain under `tests/fixtures/private/`.
